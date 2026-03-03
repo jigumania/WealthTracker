@@ -1,0 +1,381 @@
+import { db } from './db';
+import type {
+    TransactionType,
+    CashLedgerEntry,
+    Asset,
+    MarketAssetData,
+    FixedAssetData,
+    Liability
+} from './types';
+import { v4 as uuidv4 } from 'uuid';
+import { differenceInDays, parseISO } from 'date-fns';
+
+// --------------------------------------------------
+// UTILS & CALCULATIONS
+// --------------------------------------------------
+
+export async function getCashBalances() {
+    const ledger = await db.cash_ledger.toArray();
+
+    let totalCash = 0;
+    let parkingBalance = 0;
+
+    ledger.forEach(entry => {
+        switch (entry.type) {
+            case 'income':
+            case 'sell':
+            case 'move_from_parking':
+                totalCash += entry.amount;
+                break;
+            case 'expense':
+            case 'invest':
+            case 'loan_payment':
+            case 'move_to_parking':
+                totalCash -= entry.amount;
+                break;
+        }
+
+        if (entry.type === 'move_to_parking') {
+            parkingBalance += entry.amount;
+        } else if (entry.type === 'move_from_parking') {
+            parkingBalance -= entry.amount;
+        }
+    });
+
+    return {
+        totalCash,
+        parkingBalance,
+        availableCash: totalCash - parkingBalance
+    };
+}
+
+export function calculateAccruedInterest(principal: number, rate: number, startDate: string) {
+    const start = parseISO(startDate);
+    const now = new Date();
+    const days = differenceInDays(now, start);
+    const years = days / 365.25;
+
+    // Annual compounding: A = P(1 + r)^t
+    // Using continuous-like or simple approximation for fractional years if needed, 
+    // but A = P * (1 + r/100)^years is standard annual compounding.
+    const currentValue = principal * Math.pow(1 + rate / 100, years);
+    return currentValue;
+}
+
+// --------------------------------------------------
+// LEDGER ENGINE
+// --------------------------------------------------
+
+export async function addTransaction(data: {
+    type: TransactionType;
+    amount: number;
+    category_id?: string;
+    date: string;
+}) {
+    const { availableCash, parkingBalance } = await getCashBalances();
+
+    // Validations
+    if (data.type === 'expense' && data.amount > availableCash) {
+        throw new Error('Insufficient available cash');
+    }
+    if (data.type === 'move_to_parking' && data.amount > availableCash) {
+        throw new Error('Insufficient available cash to move to parking');
+    }
+    if (data.type === 'move_from_parking' && data.amount > parkingBalance) {
+        throw new Error('Insufficient parking balance');
+    }
+
+    const entry: CashLedgerEntry = {
+        id: uuidv4(),
+        ...data,
+        created_at: new Date().toISOString()
+    };
+
+    await db.cash_ledger.add(entry);
+}
+
+// --------------------------------------------------
+// MARKET ASSET ENGINE
+// --------------------------------------------------
+
+export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialData?: {
+    mode: 'existing' | 'new';
+    units: number;
+    amount: number; // For 'new', this is investment. For 'existing', it's total invested.
+    nav: number;
+}) {
+    const assetId = uuidv4();
+    const newAsset: Asset = {
+        ...asset,
+        id: assetId,
+        created_at: new Date().toISOString()
+    };
+
+    await db.transaction('rw', [db.assets, db.market_asset_data, db.cash_ledger], async () => {
+        await db.assets.add(newAsset);
+
+        if (initialData) {
+            if (initialData.mode === 'new') {
+                await investInAsset(assetId, initialData.amount, initialData.nav);
+            } else {
+                const marketData: MarketAssetData = {
+                    asset_id: assetId,
+                    total_units: initialData.units,
+                    total_invested: initialData.amount,
+                    avg_cost: initialData.units > 0 ? initialData.amount / initialData.units : 0,
+                    current_nav: initialData.nav,
+                    last_updated: new Date().toISOString()
+                };
+                await db.market_asset_data.add(marketData);
+            }
+        }
+    });
+
+    return assetId;
+}
+
+export async function investInAsset(assetId: string, amount: number, nav: number) {
+    const { availableCash } = await getCashBalances();
+    if (amount > availableCash) {
+        throw new Error('Insufficient available cash');
+    }
+
+    const unitsAdded = amount / nav;
+
+    await db.transaction('rw', [db.market_asset_data, db.cash_ledger], async () => {
+        const existing = await db.market_asset_data.get(assetId);
+
+        if (existing) {
+            const newTotalUnits = existing.total_units + unitsAdded;
+            const newTotalInvested = existing.total_invested + amount;
+            await db.market_asset_data.update(assetId, {
+                total_units: newTotalUnits,
+                total_invested: newTotalInvested,
+                avg_cost: newTotalUnits > 0 ? newTotalInvested / newTotalUnits : 0,
+                current_nav: nav,
+                last_updated: new Date().toISOString()
+            });
+        } else {
+            await db.market_asset_data.add({
+                asset_id: assetId,
+                total_units: unitsAdded,
+                total_invested: amount,
+                avg_cost: nav,
+                current_nav: nav,
+                last_updated: new Date().toISOString()
+            });
+        }
+
+        await db.cash_ledger.add({
+            id: uuidv4(),
+            type: 'invest',
+            amount,
+            related_asset_id: assetId,
+            date: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString()
+        });
+    });
+}
+
+export async function sellAsset(assetId: string, unitsToSell: number, sellNav: number) {
+    const existing = await db.market_asset_data.get(assetId);
+    if (!existing || unitsToSell > existing.total_units) {
+        throw new Error('Insufficient units to sell');
+    }
+
+    const sellAmount = unitsToSell * sellNav;
+    const remainingUnits = existing.total_units - unitsToSell;
+    const remainingInvested = existing.avg_cost * remainingUnits;
+
+    await db.transaction('rw', [db.market_asset_data, db.cash_ledger], async () => {
+        if (remainingUnits === 0) {
+            await db.market_asset_data.update(assetId, {
+                total_units: 0,
+                total_invested: 0,
+                avg_cost: 0,
+                current_nav: sellNav,
+                last_updated: new Date().toISOString()
+            });
+        } else {
+            await db.market_asset_data.update(assetId, {
+                total_units: remainingUnits,
+                total_invested: remainingInvested,
+                current_nav: sellNav,
+                last_updated: new Date().toISOString()
+            });
+        }
+
+        await db.cash_ledger.add({
+            id: uuidv4(),
+            type: 'sell',
+            amount: sellAmount,
+            related_asset_id: assetId,
+            date: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString()
+        });
+    });
+}
+
+export async function updateNAV(assetId: string, nav: number) {
+    await db.market_asset_data.update(assetId, {
+        current_nav: nav,
+        last_updated: new Date().toISOString()
+    });
+}
+
+// --------------------------------------------------
+// FIXED ASSET ENGINE
+// --------------------------------------------------
+
+export async function addFixedAsset(asset: Omit<Asset, 'id' | 'created_at'>, data: Omit<FixedAssetData, 'asset_id'>) {
+    const assetId = uuidv4();
+    await db.transaction('rw', [db.assets, db.fixed_asset_data], async () => {
+        await db.assets.add({
+            ...asset,
+            id: assetId,
+            created_at: new Date().toISOString()
+        });
+        await db.fixed_asset_data.add({
+            asset_id: assetId,
+            ...data
+        });
+    });
+}
+
+// --------------------------------------------------
+// LIABILITY ENGINE
+// --------------------------------------------------
+
+export async function addLiability(liability: Omit<Liability, 'id'>) {
+    await db.liabilities.add({
+        ...liability,
+        id: uuidv4()
+    });
+}
+
+export async function makeLiabilityPayment(liabilityId: string, amount: number) {
+    const { availableCash } = await getCashBalances();
+    const liability = await db.liabilities.get(liabilityId);
+
+    if (!liability || amount > liability.outstanding_balance) {
+        throw new Error('Cannot overpay liability');
+    }
+    if (amount > availableCash) {
+        throw new Error('Insufficient available cash');
+    }
+
+    await db.transaction('rw', [db.liabilities, db.cash_ledger], async () => {
+        await db.liabilities.update(liabilityId, {
+            outstanding_balance: liability.outstanding_balance - amount
+        });
+
+        await db.cash_ledger.add({
+            id: uuidv4(),
+            type: 'loan_payment',
+            amount,
+            related_liability_id: liabilityId,
+            date: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString()
+        });
+    });
+}
+
+// --------------------------------------------------
+// SNAPSHOT SYSTEM
+// --------------------------------------------------
+
+export async function createMonthlySnapshot() {
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+    const { totalCash } = await getCashBalances();
+    const marketData = await db.market_asset_data.toArray();
+    const fixedData = await db.fixed_asset_data.toArray();
+    const liabilities = await db.liabilities.toArray();
+
+    let totalAssets = totalCash;
+    marketData.forEach(d => {
+        totalAssets += d.total_units * d.current_nav;
+    });
+    fixedData.forEach(d => {
+        totalAssets += calculateAccruedInterest(d.principal, d.interest_rate, d.start_date);
+    });
+
+    let totalLiabilities = 0;
+    liabilities.forEach(l => {
+        totalLiabilities += l.outstanding_balance;
+    });
+
+    const netWorth = totalAssets - totalLiabilities;
+
+    await db.monthly_snapshots.put({
+        month,
+        total_assets: totalAssets,
+        total_liabilities: totalLiabilities,
+        net_worth: netWorth
+    });
+}
+// --------------------------------------------------
+// MANAGEMENT (DELETE/UPDATE)
+// --------------------------------------------------
+
+export async function deleteAsset(assetId: string) {
+    await db.transaction('rw', [db.assets, db.market_asset_data, db.fixed_asset_data, db.cash_ledger], async () => {
+        await db.assets.delete(assetId);
+        await db.market_asset_data.delete(assetId);
+        await db.fixed_asset_data.delete(assetId);
+        // Important: Should we delete ledger entries? 
+        // Requirements say "Single portfolio, local-first". Usually, deleting an asset should leave the cash ledger alone 
+        // if the cash was already moved, OR we could clean up. 
+        // Let's stick to the prompt: "Add delete and update functionality to assets".
+        // We'll just remove the asset definition and its data.
+    });
+}
+
+export async function updateAssetBasic(assetId: string, name: string) {
+    await db.assets.update(assetId, { name });
+}
+
+export async function updateMarketAssetDetails(assetId: string, data: Partial<MarketAssetData>) {
+    await db.market_asset_data.update(assetId, {
+        ...data,
+        last_updated: new Date().toISOString()
+    });
+}
+
+export async function updateFixedAssetDetails(assetId: string, data: Partial<FixedAssetData>) {
+    await db.fixed_asset_data.update(assetId, data);
+}
+
+export async function deleteTransaction(transactionId: string) {
+    await db.cash_ledger.delete(transactionId);
+}
+
+export async function updateTransaction(transactionId: string, data: {
+    amount: number;
+    category_id?: string;
+    date: string;
+}) {
+    const existing = await db.cash_ledger.get(transactionId);
+    if (!existing) throw new Error('Transaction not found');
+
+    // If it's an expense or move, we might need to validate cash again, 
+    // but updating is simpler if we assume the user knows what they're doing for local-first.
+    // However, let's keep it safe.
+    if (existing.type === 'expense' || existing.type === 'move_to_parking') {
+        const { availableCash } = await getCashBalances();
+        const diff = data.amount - existing.amount;
+        if (diff > availableCash) {
+            throw new Error('Insufficient available cash for this update');
+        }
+    }
+
+    await db.cash_ledger.update(transactionId, data);
+}
+
+export async function deleteLiability(liabilityId: string) {
+    await db.liabilities.delete(liabilityId);
+}
+
+export async function updateLiability(liabilityId: string, data: Partial<Liability>) {
+    await db.liabilities.update(liabilityId, data);
+}
