@@ -60,8 +60,8 @@ const Dashboard = () => {
 
             <div className="divider" />
 
-            <div style={{ width: '100%', height: 300, marginTop: '40px' }}>
-                <h3 className="section-header">Net Worth History</h3>
+            <div style={{ width: '100%', height: 350, marginTop: '48px' }}>
+                <h3 className="section-header"><span>Net Worth History</span></h3>
                 {snapshots && snapshots.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={snapshots}>
@@ -69,24 +69,33 @@ const Dashboard = () => {
                                 dataKey="month"
                                 axisLine={false}
                                 tickLine={false}
-                                tick={{ fontSize: 10, fill: '#a3a3a3' }}
+                                tick={{ fontSize: 11, fill: '#737373', fontWeight: 500 }}
+                                dy={10}
                             />
-                            <YAxis hide />
+                            <YAxis hide domain={['auto', 'auto']} />
                             <Tooltip
-                                contentStyle={{ border: '1px solid #e5e5e5', borderRadius: 0 }}
-                                labelStyle={{ fontWeight: 'bold' }}
+                                contentStyle={{
+                                    border: '1px solid #f0f0f0',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                                    fontSize: '12px',
+                                    fontWeight: 600
+                                }}
+                                cursor={{ stroke: '#f0f0f0', strokeWidth: 2 }}
                             />
                             <Line
                                 type="monotone"
                                 dataKey="net_worth"
                                 stroke="#000000"
-                                strokeWidth={1}
-                                dot={false}
+                                strokeWidth={2.5}
+                                dot={{ r: 4, fill: '#000000', strokeWidth: 2, stroke: '#ffffff' }}
+                                activeDot={{ r: 6, strokeWidth: 0 }}
+                                animationDuration={1000}
                             />
                         </LineChart>
                     </ResponsiveContainer>
                 ) : (
-                    <p style={{ color: '#a3a3a3', fontSize: '14px' }}>No history data available yet.</p>
+                    <p style={{ color: '#737373', fontSize: '13px', textAlign: 'center', marginTop: '40px' }}>No history data available yet.</p>
                 )}
             </div>
         </div>

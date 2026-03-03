@@ -23,7 +23,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     return (
         <div className="app-container">
             <aside className="sidebar">
-                <h1 style={{ fontSize: '1.2rem', marginBottom: '20px' }}>Wealth Tracker</h1>
+                <h1>Wealth Tracker</h1>
                 {navItems.map((item) => (
                     <a
                         key={item.id}

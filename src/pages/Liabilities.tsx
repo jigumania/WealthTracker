@@ -55,17 +55,17 @@ const Liabilities = () => {
             </div>
 
             <div className="liability-sections">
-                <h3 className="section-header" style={{ marginTop: '20px', fontSize: '14px', color: '#a3a3a3' }}>LOANS</h3>
+                <h3 className="section-header" style={{ marginTop: '24px', fontSize: '14px', color: '#737373', borderBottom: 'none', paddingBottom: 0 }}>LOANS</h3>
                 {liabilities?.filter(l => l.type === 'loan').map(loan => (
-                    <div key={loan.id} className="list-item">
+                    <div key={loan.id} className="list-item" style={{ padding: '24px 0' }}>
                         <div className="list-item-info">
                             <h4>{loan.name}</h4>
-                            <p>Rate: {loan.interest_rate}%</p>
+                            <p style={{ marginTop: '4px' }}>Rate: {loan.interest_rate}%</p>
                         </div>
-                        <div className="list-item-value">
-                            <p style={{ fontWeight: 800, fontSize: '18px' }}>{formatCurrency(loan.outstanding_balance)}</p>
+                        <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                            <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(loan.outstanding_balance)}</p>
                             <button
-                                style={{ padding: '4px 8px', fontSize: '11px', marginTop: '5px' }}
+                                style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
                                 onClick={() => setIsPayModalOpen(loan.id)}
                             >
                                 Make Payment
@@ -74,17 +74,17 @@ const Liabilities = () => {
                     </div>
                 ))}
 
-                <h3 className="section-header" style={{ marginTop: '40px', fontSize: '14px', color: '#a3a3a3' }}>CREDIT CARDS</h3>
+                <h3 className="section-header" style={{ marginTop: '48px', fontSize: '14px', color: '#737373', borderBottom: 'none', paddingBottom: 0 }}>CREDIT CARDS</h3>
                 {liabilities?.filter(l => l.type === 'credit_card').map(card => (
-                    <div key={card.id} className="list-item">
+                    <div key={card.id} className="list-item" style={{ padding: '24px 0' }}>
                         <div className="list-item-info">
                             <h4>{card.name}</h4>
-                            <p>Rate: {card.interest_rate}%</p>
+                            <p style={{ marginTop: '4px' }}>Rate: {card.interest_rate}%</p>
                         </div>
-                        <div className="list-item-value">
-                            <p style={{ fontWeight: 800, fontSize: '18px' }}>{formatCurrency(card.outstanding_balance)}</p>
+                        <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                            <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(card.outstanding_balance)}</p>
                             <button
-                                style={{ padding: '4px 8px', fontSize: '11px', marginTop: '5px' }}
+                                style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
                                 onClick={() => setIsPayModalOpen(card.id)}
                             >
                                 Make Payment

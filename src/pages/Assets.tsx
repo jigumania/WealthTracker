@@ -171,29 +171,29 @@ const Assets = () => {
                     const isGold = asset.subtype === 'gold';
 
                     return (
-                        <div key={asset.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <div key={asset.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '24px 0' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                                 <div className="list-item-info">
-                                    <h4>{asset.name} <span style={{ fontSize: '10px', color: '#a3a3a3', marginLeft: '5px' }}>{asset.subtype.toUpperCase()}</span></h4>
-                                    <p>
+                                    <h4>{asset.name} <span style={{ fontSize: '11px', color: '#737373', marginLeft: '8px', fontWeight: 500, letterSpacing: '0.05em' }}>{asset.subtype.toUpperCase()}</span></h4>
+                                    <p style={{ marginTop: '4px' }}>
                                         {isGold ? 'Quantity' : 'Units'}: {formatNumber(data.total_units, 4)} •
                                         Avg: {formatCurrency(data.avg_cost)} •
                                         {isGold ? 'Rate' : 'NAV'}: {formatCurrency(data.current_nav)}
                                     </p>
                                 </div>
                                 <div className="list-item-value">
-                                    <p style={{ fontWeight: 800, fontSize: '18px' }}>{formatCurrency(currentValue)}</p>
-                                    <p style={{ fontSize: '12px', color: gain >= 0 ? '#000000' : '#a3a3a3' }}>
+                                    <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(currentValue)}</p>
+                                    <p style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px', color: gain >= 0 ? '#000000' : '#737373' }}>
                                         {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
                                     </p>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                <button style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => setIsActionModalOpen({ type: 'invest', assetId: asset.id })}>Invest</button>
-                                <button style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => setIsActionModalOpen({ type: 'sell', assetId: asset.id })}>Sell</button>
-                                <button style={{ padding: '5px 10px', fontSize: '12px', background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsActionModalOpen({ type: 'nav', assetId: asset.id })}>Update {isGold ? 'Rate' : 'NAV'}</button>
-                                <button style={{ padding: '5px 10px', fontSize: '12px', background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => openEditModal(asset.id)}>Edit</button>
-                                <button style={{ padding: '5px 10px', fontSize: '12px', background: 'white', color: '#ff4444', border: '1px solid #ff4444' }} onClick={() => handleDeleteAsset(asset.id)}>Delete</button>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+                                <button style={{ padding: '6px 14px', fontSize: '11px', background: 'black', color: 'white' }} onClick={() => setIsActionModalOpen({ type: 'invest', assetId: asset.id })}>Invest</button>
+                                <button style={{ padding: '6px 14px', fontSize: '11px', background: 'white', color: 'black', border: '1px solid #000' }} onClick={() => setIsActionModalOpen({ type: 'sell', assetId: asset.id })}>Sell</button>
+                                <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => setIsActionModalOpen({ type: 'nav', assetId: asset.id })}>Update {isGold ? 'Rate' : 'NAV'}</button>
+                                <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => openEditModal(asset.id)}>Edit</button>
+                                <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: '#ff4444', border: '1px solid #fff0f0' }} onClick={() => handleDeleteAsset(asset.id)}>Delete</button>
                             </div>
                         </div>
                     );
@@ -226,109 +226,115 @@ const Assets = () => {
             </div>
 
             {/* Add Asset Modal */}
-            {isAddModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-header"><h3>Add Asset</h3></div>
-                        <form onSubmit={handleAddAsset}>
-                            <div className="toggle-group">
-                                <button type="button" className={formData.category === 'market' ? 'active' : ''} onClick={() => setFormData({ ...formData, category: 'market' })}>Market</button>
-                                <button type="button" className={formData.category === 'fixed' ? 'active' : ''} onClick={() => setFormData({ ...formData, category: 'fixed' })}>Fixed</button>
-                            </div>
+            {
+                isAddModalOpen && (
+                    <div className="modal-overlay">
+                        <div className="modal">
+                            <div className="modal-header"><h3>Add Asset</h3></div>
+                            <form onSubmit={handleAddAsset}>
+                                <div className="toggle-group">
+                                    <button type="button" className={formData.category === 'market' ? 'active' : ''} onClick={() => setFormData({ ...formData, category: 'market' })}>Market</button>
+                                    <button type="button" className={formData.category === 'fixed' ? 'active' : ''} onClick={() => setFormData({ ...formData, category: 'fixed' })}>Fixed</button>
+                                </div>
 
-                            <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
+                                <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
 
-                            {formData.category === 'market' ? (
-                                <>
-                                    <div className="form-group">
-                                        <label>Subtype</label>
-                                        <select value={formData.subtype} onChange={e => setFormData({ ...formData, subtype: e.target.value as any })}>
-                                            <option value="mutual_fund">Mutual Fund</option>
-                                            <option value="share">Share</option>
-                                            <option value="gold">Physical Gold</option>
-                                        </select>
-                                    </div>
-                                    <div className="toggle-group">
-                                        <button type="button" className={formData.mode === 'new' ? 'active' : ''} onClick={() => setFormData({ ...formData, mode: 'new' })}>New Investment</button>
-                                        <button type="button" className={formData.mode === 'existing' ? 'active' : ''} onClick={() => setFormData({ ...formData, mode: 'existing' })}>Existing Holding</button>
-                                    </div>
-                                    {formData.mode === 'existing' && (
-                                        <div className="form-group"><label>{formData.subtype === 'gold' ? 'Quantity (grams)' : 'Total Units'}</label><input type="number" step="0.0001" value={formData.units} onChange={e => setFormData({ ...formData, units: e.target.value })} required /></div>
-                                    )}
-                                    <div className="form-group"><label>{formData.mode === 'existing' ? 'Total Invested Amount' : 'Investment Amount'}</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
-                                    <div className="form-group"><label>{formData.subtype === 'gold' ? 'Gold Rate (per gram)' : 'Current NAV'}</label><input type="number" step="0.0001" value={formData.nav} onChange={e => setFormData({ ...formData, nav: e.target.value })} required /></div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="form-group"><label>Principal Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
-                                    <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.1" value={formData.interestRate} onChange={e => setFormData({ ...formData, interestRate: e.target.value })} required /></div>
-                                    <div className="form-group"><label>Start Date</label><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} required /></div>
-                                </>
-                            )}
+                                {formData.category === 'market' ? (
+                                    <>
+                                        <div className="form-group">
+                                            <label>Subtype</label>
+                                            <select value={formData.subtype} onChange={e => setFormData({ ...formData, subtype: e.target.value as any })}>
+                                                <option value="mutual_fund">Mutual Fund</option>
+                                                <option value="share">Share</option>
+                                                <option value="gold">Physical Gold</option>
+                                            </select>
+                                        </div>
+                                        <div className="toggle-group">
+                                            <button type="button" className={formData.mode === 'new' ? 'active' : ''} onClick={() => setFormData({ ...formData, mode: 'new' })}>New Investment</button>
+                                            <button type="button" className={formData.mode === 'existing' ? 'active' : ''} onClick={() => setFormData({ ...formData, mode: 'existing' })}>Existing Holding</button>
+                                        </div>
+                                        {formData.mode === 'existing' && (
+                                            <div className="form-group"><label>{formData.subtype === 'gold' ? 'Quantity (grams)' : 'Total Units'}</label><input type="number" step="0.0001" value={formData.units} onChange={e => setFormData({ ...formData, units: e.target.value })} required /></div>
+                                        )}
+                                        <div className="form-group"><label>{formData.mode === 'existing' ? 'Total Invested Amount' : 'Investment Amount'}</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
+                                        <div className="form-group"><label>{formData.subtype === 'gold' ? 'Gold Rate (per gram)' : 'Current NAV'}</label><input type="number" step="0.0001" value={formData.nav} onChange={e => setFormData({ ...formData, nav: e.target.value })} required /></div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="form-group"><label>Principal Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
+                                        <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.1" value={formData.interestRate} onChange={e => setFormData({ ...formData, interestRate: e.target.value })} required /></div>
+                                        <div className="form-group"><label>Start Date</label><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} required /></div>
+                                    </>
+                                )}
 
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
-                                <button type="submit" style={{ flex: 1 }}>Add</button>
-                                <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsAddModalOpen(false)}>Cancel</button>
-                            </div>
-                        </form>
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+                                    <button type="submit" style={{ flex: 1 }}>Add</button>
+                                    <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Edit Asset Modal */}
-            {isEditModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-header"><h3>Edit Asset</h3></div>
-                        <form onSubmit={handleEditAsset}>
-                            <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
+            {
+                isEditModalOpen && (
+                    <div className="modal-overlay">
+                        <div className="modal">
+                            <div className="modal-header"><h3>Edit Asset</h3></div>
+                            <form onSubmit={handleEditAsset}>
+                                <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
 
-                            {formData.category === 'market' ? (
-                                <>
-                                    <div className="form-group"><label>{formData.subtype === 'gold' ? 'Quantity (grams)' : 'Total Units'}</label><input type="number" step="0.0001" value={formData.units} onChange={e => setFormData({ ...formData, units: e.target.value })} required /></div>
-                                    <div className="form-group"><label>Total Invested Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
-                                    <div className="form-group"><label>{formData.subtype === 'gold' ? 'Gold Rate (per gram)' : 'Current NAV'}</label><input type="number" step="0.0001" value={formData.nav} onChange={e => setFormData({ ...formData, nav: e.target.value })} required /></div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="form-group"><label>Principal Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
-                                    <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.1" value={formData.interestRate} onChange={e => setFormData({ ...formData, interestRate: e.target.value })} required /></div>
-                                    <div className="form-group"><label>Start Date</label><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} required /></div>
-                                </>
-                            )}
+                                {formData.category === 'market' ? (
+                                    <>
+                                        <div className="form-group"><label>{formData.subtype === 'gold' ? 'Quantity (grams)' : 'Total Units'}</label><input type="number" step="0.0001" value={formData.units} onChange={e => setFormData({ ...formData, units: e.target.value })} required /></div>
+                                        <div className="form-group"><label>Total Invested Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
+                                        <div className="form-group"><label>{formData.subtype === 'gold' ? 'Gold Rate (per gram)' : 'Current NAV'}</label><input type="number" step="0.0001" value={formData.nav} onChange={e => setFormData({ ...formData, nav: e.target.value })} required /></div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="form-group"><label>Principal Amount</label><input type="number" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
+                                        <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.1" value={formData.interestRate} onChange={e => setFormData({ ...formData, interestRate: e.target.value })} required /></div>
+                                        <div className="form-group"><label>Start Date</label><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} required /></div>
+                                    </>
+                                )}
 
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
-                                <button type="submit" style={{ flex: 1 }}>Save</button>
-                                <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsEditModalOpen(null)}>Cancel</button>
-                            </div>
-                        </form>
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+                                    <button type="submit" style={{ flex: 1 }}>Save</button>
+                                    <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsEditModalOpen(null)}>Cancel</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Action Modals (Invest/Sell/NAV) */}
-            {isActionModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-header"><h3>{isActionModalOpen.type.toUpperCase()}</h3></div>
-                        <form onSubmit={handleAction}>
-                            {isActionModalOpen.type === 'invest' && (
-                                <div className="form-group"><label>Amount</label><input type="number" value={actionData.amount} onChange={e => setActionData({ ...actionData, amount: e.target.value })} required /></div>
-                            )}
-                            {isActionModalOpen.type === 'sell' && (
-                                <div className="form-group"><label>Units to Sell</label><input type="number" step="0.0001" value={actionData.units} onChange={e => setActionData({ ...actionData, units: e.target.value })} required /></div>
-                            )}
-                            <div className="form-group"><label>{assets?.find(a => a.id === isActionModalOpen.assetId)?.subtype === 'gold' ? 'Gold Rate (per gram)' : 'NAV'}</label><input type="number" step="0.0001" value={actionData.nav} onChange={e => setActionData({ ...actionData, nav: e.target.value })} required /></div>
+            {
+                isActionModalOpen && (
+                    <div className="modal-overlay">
+                        <div className="modal">
+                            <div className="modal-header"><h3>{isActionModalOpen?.type.toUpperCase()}</h3></div>
+                            <form onSubmit={handleAction}>
+                                {isActionModalOpen?.type === 'invest' && (
+                                    <div className="form-group"><label>Amount</label><input type="number" value={actionData.amount} onChange={e => setActionData({ ...actionData, amount: e.target.value })} required /></div>
+                                )}
+                                {isActionModalOpen?.type === 'sell' && (
+                                    <div className="form-group"><label>Units to Sell</label><input type="number" step="0.0001" value={actionData.units} onChange={e => setActionData({ ...actionData, units: e.target.value })} required /></div>
+                                )}
+                                <div className="form-group"><label>{assets?.find(a => a.id === isActionModalOpen?.assetId)?.subtype === 'gold' ? 'Gold Rate (per gram)' : 'NAV'}</label><input type="number" step="0.0001" value={actionData.nav} onChange={e => setActionData({ ...actionData, nav: e.target.value })} required /></div>
 
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
-                                <button type="submit" style={{ flex: 1 }}>Confirm</button>
-                                <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsActionModalOpen(null)}>Cancel</button>
-                            </div>
-                        </form>
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+                                    <button type="submit" style={{ flex: 1 }}>Confirm</button>
+                                    <button type="button" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => setIsActionModalOpen(null)}>Cancel</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

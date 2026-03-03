@@ -100,14 +100,14 @@ const Cash = () => {
                                 <h4>{entry.type.replace(/_/g, ' ').toUpperCase()}</h4>
                                 <p>{category?.name || 'No Category'} • {entry.date}</p>
                             </div>
-                            <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                                <p style={{ fontWeight: 600 }}>
+                            <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                <p style={{ fontWeight: 700, fontSize: '18px' }}>
                                     {['expense', 'invest', 'loan_payment', 'move_to_parking'].includes(entry.type) ? '-' : '+'}
                                     {formatCurrency(entry.amount)}
                                 </p>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <button style={{ padding: '2px 8px', fontSize: '10px', background: 'white', color: 'black', border: '1px solid #e5e5e5' }} onClick={() => openEditModal(entry)}>Edit</button>
-                                    <button style={{ padding: '2px 8px', fontSize: '10px', background: 'white', color: '#ff4444', border: '1px solid #ff4444' }} onClick={() => handleDelete(entry.id)}>Delete</button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => openEditModal(entry)}>Edit</button>
+                                    <button style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: '#ff4444', border: '1px solid #fff0f0' }} onClick={() => handleDelete(entry.id)}>Delete</button>
                                 </div>
                             </div>
                         </div>
