@@ -183,7 +183,7 @@ const Assets = () => {
                                 </div>
                                 <div className="list-item-value">
                                     <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(currentValue)}</p>
-                                    <p style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px', color: gain >= 0 ? '#000000' : '#737373' }}>
+                                    <p style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px', color: gain >= 0 ? '#16a34a' : '#dc2626' }}>
                                         {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
                                     </p>
                                 </div>

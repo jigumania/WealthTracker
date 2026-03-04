@@ -101,7 +101,7 @@ const Cash = () => {
                                 <p>{category?.name || 'No Category'} • {entry.date}</p>
                             </div>
                             <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                <p style={{ fontWeight: 700, fontSize: '18px' }}>
+                                <p style={{ fontWeight: 700, fontSize: '18px', color: ['expense', 'invest', 'loan_payment', 'move_to_parking'].includes(entry.type) ? '#dc2626' : '#16a34a' }}>
                                     {['expense', 'invest', 'loan_payment', 'move_to_parking'].includes(entry.type) ? '-' : '+'}
                                     {formatCurrency(entry.amount)}
                                 </p>
