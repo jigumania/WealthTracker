@@ -18,19 +18,27 @@ import { syncToFirestore, deleteFromFirestore, fetchAllFromFirestore } from './s
 
 export async function syncEverything(userId: string) {
     const collections = [
-        { path: 'categories', table: db.categories },
-        { path: 'cash_ledger', table: db.cash_ledger },
-        { path: 'assets', table: db.assets },
-        { path: 'market_asset_data', table: db.market_asset_data },
-        { path: 'fixed_asset_data', table: db.fixed_asset_data },
-        { path: 'liabilities', table: db.liabilities },
+        { path: 'categories', table: db.categories, key: 'id' },
+        { path: 'cash_ledger', table: db.cash_ledger, key: 'id' },
+        { path: 'assets', table: db.assets, key: 'id' },
+        { path: 'market_asset_data', table: db.market_asset_data, key: 'asset_id' },
+        { path: 'fixed_asset_data', table: db.fixed_asset_data, key: 'asset_id' },
+        { path: 'liabilities', table: db.liabilities, key: 'id' },
     ];
 
     for (const col of collections) {
-        const data = await fetchAllFromFirestore(userId, col.path);
-        if (data.length > 0) {
+        // Step 1: Push all local data TO Firestore
+        const localData = await col.table.toArray();
+        for (const item of localData) {
+            await syncToFirestore(userId, col.path, item);
+        }
+
+        // Step 2: Pull all cloud data FROM Firestore (includes data from other devices)
+        const cloudData = await fetchAllFromFirestore(userId, col.path);
+        if (cloudData.length > 0) {
+            // Merge: cloud data is the source of truth
             await col.table.clear();
-            await (col.table as any).bulkAdd(data);
+            await (col.table as any).bulkAdd(cloudData);
         }
     }
 }
