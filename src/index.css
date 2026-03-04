@@ -386,3 +386,73 @@ select:focus {
 .toggle-group button:hover:not(.active) {
   background: rgba(0, 0, 0, 0.02);
 }
+
+/* Auth & User Profile */
+.auth-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.auth-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: black;
+  color: white !important;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-button:hover {
+  background: #333;
+  transform: translateY(-1px);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-name {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.logout-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.logout-button:hover {
+  color: #ff4444;
+}

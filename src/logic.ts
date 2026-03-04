@@ -9,6 +9,31 @@ import type {
 } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays, parseISO } from 'date-fns';
+import { auth } from './firebase';
+import { syncToFirestore, deleteFromFirestore, fetchAllFromFirestore } from './services/firestore';
+
+// --------------------------------------------------
+// SYNC ENGINE
+// --------------------------------------------------
+
+export async function syncEverything(userId: string) {
+    const collections = [
+        { path: 'categories', table: db.categories },
+        { path: 'cash_ledger', table: db.cash_ledger },
+        { path: 'assets', table: db.assets },
+        { path: 'market_asset_data', table: db.market_asset_data },
+        { path: 'fixed_asset_data', table: db.fixed_asset_data },
+        { path: 'liabilities', table: db.liabilities },
+    ];
+
+    for (const col of collections) {
+        const data = await fetchAllFromFirestore(userId, col.path);
+        if (data.length > 0) {
+            await col.table.clear();
+            await (col.table as any).bulkAdd(data);
+        }
+    }
+}
 
 // --------------------------------------------------
 // UTILS & CALCULATIONS
@@ -92,6 +117,12 @@ export async function addTransaction(data: {
     };
 
     await db.cash_ledger.add(entry);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'cash_ledger', entry);
+    }
 }
 
 // --------------------------------------------------
@@ -114,6 +145,12 @@ export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialD
     await db.transaction('rw', [db.assets, db.market_asset_data, db.cash_ledger], async () => {
         await db.assets.add(newAsset);
 
+        // Sync Asset to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await syncToFirestore(user.uid, 'assets', newAsset);
+        }
+
         if (initialData) {
             if (initialData.mode === 'new') {
                 await investInAsset(assetId, initialData.amount, initialData.nav);
@@ -127,6 +164,11 @@ export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialD
                     last_updated: new Date().toISOString()
                 };
                 await db.market_asset_data.add(marketData);
+
+                // Sync MarketData to Firestore
+                if (user) {
+                    await syncToFirestore(user.uid, 'market_asset_data', marketData);
+                }
             }
         }
     });
@@ -148,32 +190,53 @@ export async function investInAsset(assetId: string, amount: number, nav: number
         if (existing) {
             const newTotalUnits = existing.total_units + unitsAdded;
             const newTotalInvested = existing.total_invested + amount;
-            await db.market_asset_data.update(assetId, {
+            const update = {
                 total_units: newTotalUnits,
                 total_invested: newTotalInvested,
                 avg_cost: newTotalUnits > 0 ? newTotalInvested / newTotalUnits : 0,
                 current_nav: nav,
                 last_updated: new Date().toISOString()
-            });
+            };
+            await db.market_asset_data.update(assetId, update);
+
+            // Sync update to Firestore
+            const user = auth.currentUser;
+            if (user) {
+                await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
+            }
         } else {
-            await db.market_asset_data.add({
+            const marketData = {
                 asset_id: assetId,
                 total_units: unitsAdded,
                 total_invested: amount,
                 avg_cost: nav,
                 current_nav: nav,
                 last_updated: new Date().toISOString()
-            });
+            };
+            await db.market_asset_data.add(marketData);
+
+            // Sync to Firestore
+            const user = auth.currentUser;
+            if (user) {
+                await syncToFirestore(user.uid, 'market_asset_data', marketData);
+            }
         }
 
-        await db.cash_ledger.add({
+        const ledgerEntry: CashLedgerEntry = {
             id: uuidv4(),
             type: 'invest',
             amount,
             related_asset_id: assetId,
             date: new Date().toISOString().split('T')[0],
             created_at: new Date().toISOString()
-        });
+        };
+        await db.cash_ledger.add(ledgerEntry);
+
+        // Sync ledger to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
+        }
     });
 }
 
@@ -188,39 +251,56 @@ export async function sellAsset(assetId: string, unitsToSell: number, sellNav: n
     const remainingInvested = existing.avg_cost * remainingUnits;
 
     await db.transaction('rw', [db.market_asset_data, db.cash_ledger], async () => {
-        if (remainingUnits === 0) {
-            await db.market_asset_data.update(assetId, {
-                total_units: 0,
-                total_invested: 0,
-                avg_cost: 0,
-                current_nav: sellNav,
-                last_updated: new Date().toISOString()
-            });
-        } else {
-            await db.market_asset_data.update(assetId, {
-                total_units: remainingUnits,
-                total_invested: remainingInvested,
-                current_nav: sellNav,
-                last_updated: new Date().toISOString()
-            });
+        const update = remainingUnits === 0 ? {
+            total_units: 0,
+            total_invested: 0,
+            avg_cost: 0,
+            current_nav: sellNav,
+            last_updated: new Date().toISOString()
+        } : {
+            total_units: remainingUnits,
+            total_invested: remainingInvested,
+            current_nav: sellNav,
+            last_updated: new Date().toISOString()
+        };
+
+        await db.market_asset_data.update(assetId, update);
+
+        // Sync MarketData update to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
         }
 
-        await db.cash_ledger.add({
+        const ledgerEntry: CashLedgerEntry = {
             id: uuidv4(),
             type: 'sell',
             amount: sellAmount,
             related_asset_id: assetId,
             date: new Date().toISOString().split('T')[0],
             created_at: new Date().toISOString()
-        });
+        };
+        await db.cash_ledger.add(ledgerEntry);
+
+        // Sync Ledger to Firestore
+        if (user) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
+        }
     });
 }
 
 export async function updateNAV(assetId: string, nav: number) {
-    await db.market_asset_data.update(assetId, {
+    const update = {
         current_nav: nav,
         last_updated: new Date().toISOString()
-    });
+    };
+    await db.market_asset_data.update(assetId, update);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
+    }
 }
 
 // --------------------------------------------------
@@ -229,16 +309,26 @@ export async function updateNAV(assetId: string, nav: number) {
 
 export async function addFixedAsset(asset: Omit<Asset, 'id' | 'created_at'>, data: Omit<FixedAssetData, 'asset_id'>) {
     const assetId = uuidv4();
+    const newAsset = {
+        ...asset,
+        id: assetId,
+        created_at: new Date().toISOString()
+    };
+    const fixedData = {
+        asset_id: assetId,
+        ...data
+    };
+
     await db.transaction('rw', [db.assets, db.fixed_asset_data], async () => {
-        await db.assets.add({
-            ...asset,
-            id: assetId,
-            created_at: new Date().toISOString()
-        });
-        await db.fixed_asset_data.add({
-            asset_id: assetId,
-            ...data
-        });
+        await db.assets.add(newAsset);
+        await db.fixed_asset_data.add(fixedData);
+
+        // Sync to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await syncToFirestore(user.uid, 'assets', newAsset);
+            await syncToFirestore(user.uid, 'fixed_asset_data', fixedData);
+        }
     });
 }
 
@@ -247,10 +337,17 @@ export async function addFixedAsset(asset: Omit<Asset, 'id' | 'created_at'>, dat
 // --------------------------------------------------
 
 export async function addLiability(liability: Omit<Liability, 'id'>) {
-    await db.liabilities.add({
+    const newLiability = {
         ...liability,
         id: uuidv4()
-    });
+    };
+    await db.liabilities.add(newLiability);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'liabilities', newLiability);
+    }
 }
 
 export async function makeLiabilityPayment(liabilityId: string, amount: number) {
@@ -265,18 +362,31 @@ export async function makeLiabilityPayment(liabilityId: string, amount: number) 
     }
 
     await db.transaction('rw', [db.liabilities, db.cash_ledger], async () => {
+        const newBalance = liability.outstanding_balance - amount;
         await db.liabilities.update(liabilityId, {
-            outstanding_balance: liability.outstanding_balance - amount
+            outstanding_balance: newBalance
         });
 
-        await db.cash_ledger.add({
+        // Sync Liability update to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await syncToFirestore(user.uid, 'liabilities', { id: liabilityId, outstanding_balance: newBalance });
+        }
+
+        const ledgerEntry: CashLedgerEntry = {
             id: uuidv4(),
             type: 'loan_payment',
             amount,
             related_liability_id: liabilityId,
             date: new Date().toISOString().split('T')[0],
             created_at: new Date().toISOString()
-        });
+        };
+        await db.cash_ledger.add(ledgerEntry);
+
+        // Sync Ledger to Firestore
+        if (user) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
+        }
     });
 }
 
@@ -323,31 +433,59 @@ export async function deleteAsset(assetId: string) {
         await db.assets.delete(assetId);
         await db.market_asset_data.delete(assetId);
         await db.fixed_asset_data.delete(assetId);
-        // Important: Should we delete ledger entries? 
-        // Requirements say "Single portfolio, local-first". Usually, deleting an asset should leave the cash ledger alone 
-        // if the cash was already moved, OR we could clean up. 
-        // Let's stick to the prompt: "Add delete and update functionality to assets".
-        // We'll just remove the asset definition and its data.
+
+        // Sync Delete to Firestore
+        const user = auth.currentUser;
+        if (user) {
+            await deleteFromFirestore(user.uid, 'assets', assetId);
+            await deleteFromFirestore(user.uid, 'market_asset_data', assetId);
+            await deleteFromFirestore(user.uid, 'fixed_asset_data', assetId);
+        }
     });
 }
 
 export async function updateAssetBasic(assetId: string, name: string) {
     await db.assets.update(assetId, { name });
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'assets', { id: assetId, name });
+    }
 }
 
 export async function updateMarketAssetDetails(assetId: string, data: Partial<MarketAssetData>) {
-    await db.market_asset_data.update(assetId, {
+    const update = {
         ...data,
         last_updated: new Date().toISOString()
-    });
+    };
+    await db.market_asset_data.update(assetId, update);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
+    }
 }
 
 export async function updateFixedAssetDetails(assetId: string, data: Partial<FixedAssetData>) {
     await db.fixed_asset_data.update(assetId, data);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'fixed_asset_data', { asset_id: assetId, ...data });
+    }
 }
 
 export async function deleteTransaction(transactionId: string) {
     await db.cash_ledger.delete(transactionId);
+
+    // Sync delete to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await deleteFromFirestore(user.uid, 'cash_ledger', transactionId);
+    }
 }
 
 export async function updateTransaction(transactionId: string, data: {
@@ -370,12 +508,30 @@ export async function updateTransaction(transactionId: string, data: {
     }
 
     await db.cash_ledger.update(transactionId, data);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'cash_ledger', { id: transactionId, ...data });
+    }
 }
 
 export async function deleteLiability(liabilityId: string) {
     await db.liabilities.delete(liabilityId);
+
+    // Sync delete to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await deleteFromFirestore(user.uid, 'liabilities', liabilityId);
+    }
 }
 
 export async function updateLiability(liabilityId: string, data: Partial<Liability>) {
     await db.liabilities.update(liabilityId, data);
+
+    // Sync to Firestore
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'liabilities', { id: liabilityId, ...data });
+    }
 }

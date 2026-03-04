@@ -3,8 +3,11 @@ import {
     LayoutDashboard,
     Wallet,
     TrendingUp,
-    MinusCircle
+    MinusCircle,
+    LogIn,
+    LogOut
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -13,6 +16,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+    const { user, loginWithGoogle, logout } = useAuth();
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'cash', label: 'Cash', icon: Wallet },
@@ -40,6 +44,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 ))}
             </aside>
             <main className="main-content">
+                <header className="auth-header">
+                    {!user ? (
+                        <button className="auth-button" onClick={loginWithGoogle}>
+                            <LogIn size={18} />
+                            <span>Login with Google</span>
+                        </button>
+                    ) : (
+                        <div className="user-profile">
+                            <img src={user.photoURL || ''} alt={user.displayName || ''} className="user-avatar" />
+                            <div className="user-info">
+                                <span className="user-name">{user.displayName}</span>
+                                <button className="logout-button" onClick={logout} title="Logout">
+                                    <LogOut size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </header>
                 {children}
             </main>
         </div>

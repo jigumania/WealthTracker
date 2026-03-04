@@ -5,6 +5,7 @@ import Cash from './pages/Cash';
 import Assets from './pages/Assets';
 import Liabilities from './pages/Liabilities';
 import { seedDatabase } from './db';
+import { AuthProvider } from './context/AuthContext';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -29,9 +30,11 @@ function App() {
   };
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      {renderContent()}
-    </Layout>
+    <AuthProvider>
+      <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+        {renderContent()}
+      </Layout>
+    </AuthProvider>
   );
 }
 
