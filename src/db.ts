@@ -8,7 +8,6 @@ import type {
     Liability,
     MonthlySnapshot
 } from './types';
-import { v4 as uuidv4 } from 'uuid';
 
 export class WealthDatabase extends Dexie {
     categories!: Table<Category>;
@@ -55,7 +54,7 @@ export async function seedDatabase() {
     if (count === 0) {
         await db.categories.bulkAdd(DEFAULT_CATEGORIES.map(cat => ({
             ...cat,
-            id: uuidv4()
+            id: `cat_${cat.type}_${cat.name.toLowerCase().replace(/\s+/g, '_')}`
         })));
     }
 }

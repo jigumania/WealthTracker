@@ -34,9 +34,30 @@ export async function syncEverything(userId: string) {
         }
 
         // Step 2: Pull all cloud data FROM Firestore (includes data from other devices)
-        const cloudData = await fetchAllFromFirestore(userId, col.path);
+        let cloudData = await fetchAllFromFirestore(userId, col.path);
+
+        // Step 3: Deduplicate categories by name (handles legacy UUID duplicates)
+        if (col.path === 'categories' && cloudData.length > 0) {
+            const seen = new Set<string>();
+            const duplicateIds: string[] = [];
+            const unique: any[] = [];
+            for (const item of cloudData) {
+                const name = (item as any).name;
+                if (seen.has(name)) {
+                    duplicateIds.push((item as any).id || (item as any).asset_id);
+                } else {
+                    seen.add(name);
+                    unique.push(item);
+                }
+            }
+            cloudData = unique;
+            // Clean up duplicates from Firestore
+            for (const id of duplicateIds) {
+                await deleteFromFirestore(userId, col.path, id);
+            }
+        }
+
         if (cloudData.length > 0) {
-            // Merge: cloud data is the source of truth
             await col.table.clear();
             await (col.table as any).bulkAdd(cloudData);
         }
