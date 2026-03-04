@@ -6,7 +6,7 @@ import { formatCurrency } from '../utils';
 
 
 const Cash = () => {
-    const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, availableCash: 0 });
+    const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, emergencyBalance: 0, availableCash: 0 });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState<string | null>(null);
     const [formData, setFormData] = useState({
@@ -71,6 +71,8 @@ const Cash = () => {
         });
     };
 
+    const isOutflow = (type: string) => ['expense', 'invest', 'loan_payment', 'move_to_parking', 'move_to_emergency'].includes(type);
+
     return (
         <div>
             <div className="section-header">
@@ -87,6 +89,10 @@ const Cash = () => {
                     <p className="stat-label">Parking Balance</p>
                     <p className="stat-value">{formatCurrency(balances.parkingBalance)}</p>
                 </div>
+                <div className="stat-card">
+                    <p className="stat-label">Emergency Fund</p>
+                    <p className="stat-value">{formatCurrency(balances.emergencyBalance)}</p>
+                </div>
             </div>
 
             <div className="divider" />
@@ -101,8 +107,8 @@ const Cash = () => {
                                 <p>{category?.name || 'No Category'} • {entry.date}</p>
                             </div>
                             <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                <p style={{ fontWeight: 700, fontSize: '18px', color: ['expense', 'invest', 'loan_payment', 'move_to_parking'].includes(entry.type) ? '#dc2626' : '#16a34a' }}>
-                                    {['expense', 'invest', 'loan_payment', 'move_to_parking'].includes(entry.type) ? '-' : '+'}
+                                <p style={{ fontWeight: 700, fontSize: '18px', color: isOutflow(entry.type) ? '#dc2626' : '#16a34a' }}>
+                                    {isOutflow(entry.type) ? '-' : '+'}
                                     {formatCurrency(entry.amount)}
                                 </p>
                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -117,14 +123,15 @@ const Cash = () => {
 
             {isModalOpen && (
                 <div className="modal-overlay">
-                    <div className="modal">
+                    <div className="modal" style={{ width: '500px' }}>
                         <div className="modal-header">
                             <h3>Add Transaction</h3>
                         </div>
                         <form onSubmit={handleSubmit}>
-                            <div className="toggle-group">
+                            <div className="toggle-group" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                 <button
                                     type="button"
+                                    style={{ flex: '1 1 48%' }}
                                     className={formData.type === 'income' ? 'active' : ''}
                                     onClick={() => setFormData({ ...formData, type: 'income' })}
                                 >
@@ -132,6 +139,7 @@ const Cash = () => {
                                 </button>
                                 <button
                                     type="button"
+                                    style={{ flex: '1 1 48%' }}
                                     className={formData.type === 'expense' ? 'active' : ''}
                                     onClick={() => setFormData({ ...formData, type: 'expense' })}
                                 >
@@ -139,6 +147,7 @@ const Cash = () => {
                                 </button>
                                 <button
                                     type="button"
+                                    style={{ flex: '1 1 48%' }}
                                     className={formData.type === 'move_to_parking' ? 'active' : ''}
                                     onClick={() => setFormData({ ...formData, type: 'move_to_parking' })}
                                 >
@@ -146,12 +155,30 @@ const Cash = () => {
                                 </button>
                                 <button
                                     type="button"
+                                    style={{ flex: '1 1 48%' }}
                                     className={formData.type === 'move_from_parking' ? 'active' : ''}
                                     onClick={() => setFormData({ ...formData, type: 'move_from_parking' })}
                                 >
                                     From Parking
                                 </button>
+                                <button
+                                    type="button"
+                                    style={{ flex: '1 1 48%' }}
+                                    className={formData.type === 'move_to_emergency' ? 'active' : ''}
+                                    onClick={() => setFormData({ ...formData, type: 'move_to_emergency' })}
+                                >
+                                    To Emergency
+                                </button>
+                                <button
+                                    type="button"
+                                    style={{ flex: '1 1 48%' }}
+                                    className={formData.type === 'move_from_emergency' ? 'active' : ''}
+                                    onClick={() => setFormData({ ...formData, type: 'move_from_emergency' })}
+                                >
+                                    From Emergency
+                                </button>
                             </div>
+
 
                             <div className="form-group">
                                 <label>Amount</label>

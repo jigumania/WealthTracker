@@ -73,6 +73,7 @@ export async function getCashBalances() {
 
     let totalCash = 0;
     let parkingBalance = 0;
+    let emergencyBalance = 0;
 
     ledger.forEach(entry => {
         switch (entry.type) {
@@ -91,13 +92,20 @@ export async function getCashBalances() {
             case 'move_from_parking':
                 parkingBalance -= entry.amount;
                 break;
+            case 'move_to_emergency':
+                emergencyBalance += entry.amount;
+                break;
+            case 'move_from_emergency':
+                emergencyBalance -= entry.amount;
+                break;
         }
     });
 
     return {
         totalCash,
         parkingBalance,
-        availableCash: totalCash - parkingBalance
+        emergencyBalance,
+        availableCash: totalCash - parkingBalance - emergencyBalance
     };
 }
 
@@ -124,17 +132,17 @@ export async function addTransaction(data: {
     category_id?: string;
     date: string;
 }) {
-    const { availableCash, parkingBalance } = await getCashBalances();
+    const { availableCash, parkingBalance, emergencyBalance } = await getCashBalances();
 
     // Validations
-    if (data.type === 'expense' && data.amount > availableCash) {
+    if ((data.type === 'expense' || data.type === 'move_to_parking' || data.type === 'move_to_emergency') && data.amount > availableCash) {
         throw new Error('Insufficient available cash');
-    }
-    if (data.type === 'move_to_parking' && data.amount > availableCash) {
-        throw new Error('Insufficient available cash to move to parking');
     }
     if (data.type === 'move_from_parking' && data.amount > parkingBalance) {
         throw new Error('Insufficient parking balance');
+    }
+    if (data.type === 'move_from_emergency' && data.amount > emergencyBalance) {
+        throw new Error('Insufficient emergency balance');
     }
 
     const entry: CashLedgerEntry = {

@@ -1,4 +1,4 @@
-export type TransactionType = 'income' | 'expense' | 'invest' | 'sell' | 'loan_payment' | 'move_to_parking' | 'move_from_parking';
+export type TransactionType = 'income' | 'expense' | 'invest' | 'sell' | 'loan_payment' | 'move_to_parking' | 'move_from_parking' | 'move_to_emergency' | 'move_from_emergency';
 export type AssetCategory = 'market' | 'fixed';
 export type AssetSubtype = 'mutual_fund' | 'share' | 'gold' | 'silver' | 'fd' | 'epf' | 'ppf' | 'bond' | 'other_market' | 'other_fixed';
 export type LiabilityType = 'loan' | 'credit_card';

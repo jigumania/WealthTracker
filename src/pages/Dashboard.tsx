@@ -6,7 +6,7 @@ import { formatCurrency } from '../utils';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const Dashboard = () => {
-    const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, availableCash: 0 });
+    const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, emergencyBalance: 0, availableCash: 0 });
     const marketAssets = useLiveQuery(() => db.market_asset_data.toArray());
     const fixedAssets = useLiveQuery(() => db.fixed_asset_data.toArray());
     const liabilities = useLiveQuery(() => db.liabilities.toArray());
@@ -49,6 +49,10 @@ const Dashboard = () => {
                     <p className="stat-value">{formatCurrency(balances.parkingBalance)}</p>
                 </div>
                 <div className="stat-card">
+                    <p className="stat-label">Emergency Fund</p>
+                    <p className="stat-value">{formatCurrency(balances.emergencyBalance)}</p>
+                </div>
+                <div className="stat-card">
                     <p className="stat-label">Market Assets</p>
                     <p className="stat-value">{formatCurrency(marketTotal)}</p>
                 </div>
@@ -57,6 +61,7 @@ const Dashboard = () => {
                     <p className="stat-value">{formatCurrency(fixedTotal)}</p>
                 </div>
             </div>
+
 
             <div className="divider" />
 
