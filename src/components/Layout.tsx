@@ -5,9 +5,11 @@ import {
     TrendingUp,
     MinusCircle,
     LogIn,
-    LogOut
+    LogOut,
+    RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { syncEverything } from '../logic';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -17,6 +19,22 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
     const { user, loginWithGoogle, logout } = useAuth();
+    const [isSyncing, setIsSyncing] = React.useState(false);
+
+    const handleSync = async () => {
+        if (!user || isSyncing) return;
+        setIsSyncing(true);
+        try {
+            await syncEverything(user.uid);
+            // Optionally reload page or state if needed, but Dexie hooks usually handle it
+        } catch (error) {
+            console.error('Sync failed:', error);
+            alert('Sync failed. Please try again.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'cash', label: 'Cash', icon: Wallet },
@@ -44,7 +62,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 ))}
             </aside>
             <main className="main-content">
-                <header className="auth-header">
+                <header className="auth-header" style={{ alignItems: 'center', gap: '16px' }}>
+                    {user && (
+                        <button
+                            className="sync-button"
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            title="Sync Data"
+                        >
+                            <RefreshCw size={16} className={isSyncing ? 'spin' : ''} />
+                            <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                        </button>
+                    )}
                     {!user ? (
                         <button className="auth-button" onClick={loginWithGoogle}>
                             <LogIn size={18} />
