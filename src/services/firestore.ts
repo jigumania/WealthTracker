@@ -40,12 +40,17 @@ export const fetchAllFromFirestore = async (userId: string, path: string) => {
 };
 
 export const subscribeToCollection = (userId: string, path: string, onUpdate: (data: any[]) => void) => {
+    console.log(`Setting up subscription for: ${path}`);
     const colRef = collection(db, 'users', userId, path);
     const q = query(colRef);
     return onSnapshot(q, (snapshot) => {
+        console.log(`Snapshot received for ${path}: ${snapshot.size} items`);
         const data = snapshot.docs.map(doc => doc.data());
         onUpdate(data);
     }, (error) => {
         console.error(`Error subscribing to ${path}:`, error);
+        if (error.code === 'permission-denied') {
+            console.error(`Permission denied for ${path}. Please check your Security Rules.`);
+        }
     });
 };

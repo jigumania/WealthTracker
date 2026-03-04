@@ -7,6 +7,7 @@ import Liabilities from './pages/Liabilities';
 import { seedDatabase } from './db';
 import { AuthProvider } from './context/AuthContext';
 
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import { initRealtimeSync } from './logic';
 
@@ -23,10 +24,13 @@ function App() {
 
     let unsubscribeSync: (() => void) | undefined;
 
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    console.log('Initializing Auth listener for Sync...');
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
+        console.log('User logged in, starting real-time sync for:', user.uid);
         unsubscribeSync = initRealtimeSync(user.uid);
       } else {
+        console.log('User logged out, stopping real-time sync.');
         if (unsubscribeSync) {
           unsubscribeSync();
           unsubscribeSync = undefined;
