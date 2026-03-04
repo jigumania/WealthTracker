@@ -3,12 +3,12 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAvokQGmrFMLFvzLVT_hmKCtsUKiFepsG4",
-    authDomain: "wealth-tracker-jiggy-133796.firebaseapp.com",
-    projectId: "wealth-tracker-jiggy-133796",
-    storageBucket: "wealth-tracker-jiggy-133796.firebasestorage.app",
-    messagingSenderId: "225256967493",
-    appId: "1:225256967493:web:7766fe4738dbb82d5a422c"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase

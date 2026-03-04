@@ -8,7 +8,7 @@
   "auth": {
     "providers": {
       "googleSignIn": {
-        "oAuthBrandDisplayName": "Wealth Tracker",
+        "oAuthBrandDisplayName": "Wealth Tracker Prod",
         "supportEmail": "jigumania@gmail.com"
       }
     }
