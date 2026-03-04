@@ -10,7 +10,7 @@ import type {
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays, parseISO } from 'date-fns';
 import { auth } from './firebase';
-import { syncToFirestore, deleteFromFirestore, fetchAllFromFirestore } from './services/firestore';
+import { syncToFirestore, deleteFromFirestore, fetchAllFromFirestore, subscribeToCollection } from './services/firestore';
 
 // --------------------------------------------------
 // SYNC ENGINE
@@ -62,6 +62,42 @@ export async function syncEverything(userId: string) {
             await (col.table as any).bulkAdd(cloudData);
         }
     }
+}
+
+export function initRealtimeSync(userId: string) {
+    const collections = [
+        { path: 'categories', table: db.categories },
+        { path: 'cash_ledger', table: db.cash_ledger },
+        { path: 'assets', table: db.assets },
+        { path: 'market_asset_data', table: db.market_asset_data },
+        { path: 'fixed_asset_data', table: db.fixed_asset_data },
+        { path: 'liabilities', table: db.liabilities },
+    ];
+
+    const unsubscribes = collections.map(col => {
+        return subscribeToCollection(userId, col.path, async (cloudData) => {
+            if (cloudData.length > 0) {
+                let finalData = cloudData;
+
+                // Deduplicate categories by name locally as well
+                if (col.path === 'categories') {
+                    const seen = new Set<string>();
+                    finalData = cloudData.filter(item => {
+                        const name = (item as any).name;
+                        if (seen.has(name)) return false;
+                        seen.add(name);
+                        return true;
+                    });
+                }
+
+                // bulkPut is better for individual updates from other devices
+                // though Dexie's bulkPut with existing IDs will overwrite
+                await (col.table as any).bulkPut(finalData);
+            }
+        });
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
 }
 
 // --------------------------------------------------

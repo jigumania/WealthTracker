@@ -3,7 +3,9 @@ import {
     doc,
     setDoc,
     getDocs,
-    deleteDoc
+    deleteDoc,
+    onSnapshot,
+    query
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -35,4 +37,15 @@ export const fetchAllFromFirestore = async (userId: string, path: string) => {
         console.error(`Error fetching ${path}:`, error);
         return [];
     }
+};
+
+export const subscribeToCollection = (userId: string, path: string, onUpdate: (data: any[]) => void) => {
+    const colRef = collection(db, 'users', userId, path);
+    const q = query(colRef);
+    return onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => doc.data());
+        onUpdate(data);
+    }, (error) => {
+        console.error(`Error subscribing to ${path}:`, error);
+    });
 };

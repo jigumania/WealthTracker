@@ -7,6 +7,9 @@ import Liabilities from './pages/Liabilities';
 import { seedDatabase } from './db';
 import { AuthProvider } from './context/AuthContext';
 
+import { auth } from './firebase';
+import { initRealtimeSync } from './logic';
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [initialized, setInitialized] = useState(false);
@@ -14,6 +17,28 @@ function App() {
   useEffect(() => {
     seedDatabase().then(() => setInitialized(true));
   }, []);
+
+  useEffect(() => {
+    if (!initialized) return;
+
+    let unsubscribeSync: (() => void) | undefined;
+
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (user) {
+        unsubscribeSync = initRealtimeSync(user.uid);
+      } else {
+        if (unsubscribeSync) {
+          unsubscribeSync();
+          unsubscribeSync = undefined;
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSync) unsubscribeSync();
+    };
+  }, [initialized]);
 
   if (!initialized) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>Initializing...</div>;
