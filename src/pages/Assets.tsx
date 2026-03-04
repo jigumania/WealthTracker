@@ -214,6 +214,9 @@ const Assets = () => {
                                 </div>
                                 <div className="list-item-value">
                                     <p style={{ fontWeight: 800, fontSize: '18px' }}>{formatCurrency(currentValue)}</p>
+                                    <p style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px', color: '#16a34a' }}>
+                                        +{formatCurrency(currentValue - data.principal)}
+                                    </p>
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
