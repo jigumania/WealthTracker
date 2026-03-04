@@ -78,21 +78,19 @@ export async function getCashBalances() {
         switch (entry.type) {
             case 'income':
             case 'sell':
-            case 'move_from_parking':
                 totalCash += entry.amount;
                 break;
             case 'expense':
             case 'invest':
             case 'loan_payment':
-            case 'move_to_parking':
                 totalCash -= entry.amount;
                 break;
-        }
-
-        if (entry.type === 'move_to_parking') {
-            parkingBalance += entry.amount;
-        } else if (entry.type === 'move_from_parking') {
-            parkingBalance -= entry.amount;
+            case 'move_to_parking':
+                parkingBalance += entry.amount;
+                break;
+            case 'move_from_parking':
+                parkingBalance -= entry.amount;
+                break;
         }
     });
 
