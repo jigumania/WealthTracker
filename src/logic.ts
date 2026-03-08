@@ -33,10 +33,10 @@ export async function syncEverything(userId: string) {
             await syncToFirestore(userId, col.path, item);
         }
 
-        // Step 2: Pull all cloud data FROM Firestore (includes data from other devices)
+        // Step 3: Pull all cloud data FROM Firestore (includes data from other devices)
         let cloudData = await fetchAllFromFirestore(userId, col.path);
 
-        // Step 3: Deduplicate categories by name (handles legacy UUID duplicates)
+        // Step 4: Deduplicate categories by name (handles legacy UUID duplicates)
         if (col.path === 'categories' && cloudData.length > 0) {
             const seen = new Set<string>();
             const duplicateIds: string[] = [];
@@ -57,8 +57,9 @@ export async function syncEverything(userId: string) {
             }
         }
 
+        // ALWAYS clear local and replace with cloud data to handle deletions correctly
+        await col.table.clear();
         if (cloudData.length > 0) {
-            await col.table.clear();
             await (col.table as any).bulkAdd(cloudData);
         }
     }
@@ -76,23 +77,24 @@ export function initRealtimeSync(userId: string) {
 
     const unsubscribes = collections.map(col => {
         return subscribeToCollection(userId, col.path, async (cloudData) => {
-            if (cloudData.length > 0) {
-                let finalData = cloudData;
+            let finalData = cloudData;
 
-                // Deduplicate categories by name locally as well
-                if (col.path === 'categories') {
-                    const seen = new Set<string>();
-                    finalData = cloudData.filter(item => {
-                        const name = (item as any).name;
-                        if (seen.has(name)) return false;
-                        seen.add(name);
-                        return true;
-                    });
-                }
+            // Deduplicate categories by name locally as well
+            if (col.path === 'categories') {
+                const seen = new Set<string>();
+                finalData = cloudData.filter(item => {
+                    const name = (item as any).name;
+                    if (seen.has(name)) return false;
+                    seen.add(name);
+                    return true;
+                });
+            }
 
-                // bulkPut is better for individual updates from other devices
-                // though Dexie's bulkPut with existing IDs will overwrite
-                await (col.table as any).bulkPut(finalData);
+            // To handle deletions from other devices, we clear and re-add
+            // This ensures the local Dexie table is a mirror of Firestore
+            await col.table.clear();
+            if (finalData.length > 0) {
+                await (col.table as any).bulkAdd(finalData);
             }
         });
     });

@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'rec
 
 const Dashboard = () => {
     const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, emergencyBalance: 0, availableCash: 0 });
+    const ledger = useLiveQuery(() => db.cash_ledger.toArray());
     const marketAssets = useLiveQuery(() => db.market_asset_data.toArray());
     const fixedAssets = useLiveQuery(() => db.fixed_asset_data.toArray());
     const liabilities = useLiveQuery(() => db.liabilities.toArray());
@@ -16,7 +17,7 @@ const Dashboard = () => {
         getCashBalances().then(setBalances);
         // Create snapshot for current month if it doesn't exist
         import('../logic').then(m => m.createMonthlySnapshot());
-    }, [marketAssets, fixedAssets, liabilities]);
+    }, [ledger, marketAssets, fixedAssets, liabilities]);
 
     const marketTotal = marketAssets?.reduce((acc, curr) => acc + (curr.total_units * curr.current_nav), 0) || 0;
     const fixedTotal = fixedAssets?.reduce((acc, curr) => acc + calculateAccruedInterest(curr.principal, curr.interest_rate, curr.start_date), 0) || 0;

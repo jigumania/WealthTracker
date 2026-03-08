@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { addLiability, makeLiabilityPayment } from '../logic';
+import { addLiability, makeLiabilityPayment, deleteLiability } from '../logic';
 import { formatCurrency } from '../utils';
 import type { LiabilityType } from '../types';
 
@@ -47,6 +47,12 @@ const Liabilities = () => {
         }
     };
 
+    const handleDelete = async (id: string) => {
+        if (window.confirm('Are you sure you want to delete this liability?')) {
+            await deleteLiability(id);
+        }
+    };
+
     return (
         <div>
             <div className="section-header">
@@ -64,12 +70,20 @@ const Liabilities = () => {
                         </div>
                         <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                             <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(loan.outstanding_balance)}</p>
-                            <button
-                                style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
-                                onClick={() => setIsPayModalOpen(loan.id)}
-                            >
-                                Make Payment
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
+                                    onClick={() => setIsPayModalOpen(loan.id)}
+                                >
+                                    Make Payment
+                                </button>
+                                <button
+                                    style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: '#ff4444', border: '1px solid #fff0f0' }}
+                                    onClick={() => handleDelete(loan.id)}
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -83,12 +97,20 @@ const Liabilities = () => {
                         </div>
                         <div className="list-item-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                             <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(card.outstanding_balance)}</p>
-                            <button
-                                style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
-                                onClick={() => setIsPayModalOpen(card.id)}
-                            >
-                                Make Payment
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
+                                    onClick={() => setIsPayModalOpen(card.id)}
+                                >
+                                    Make Payment
+                                </button>
+                                <button
+                                    style={{ padding: '4px 12px', fontSize: '11px', background: 'transparent', color: '#ff4444', border: '1px solid #fff0f0' }}
+                                    onClick={() => handleDelete(card.id)}
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}
