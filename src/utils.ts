@@ -15,6 +15,7 @@ export const formatNumber = (num: number, precision: number = 2) => {
 };
 
 export const formatSubtype = (subtype: string) => {
+    if (!subtype) return 'Unknown Asset';
     const map: Record<string, string> = {
         mutual_fund: 'Mutual Funds',
         share: 'Equity Shares',

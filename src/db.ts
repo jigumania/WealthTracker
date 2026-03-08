@@ -20,11 +20,11 @@ export class WealthDatabase extends Dexie {
 
     constructor() {
         super('WealthTrackerDB');
-        this.version(1).stores({
+        this.version(2).stores({
             categories: 'id, name, type',
             cash_ledger: 'id, type, amount, category_id, related_asset_id, related_liability_id, date, created_at',
             assets: 'id, name, category, subtype, created_at',
-            market_asset_data: 'asset_id, total_units, total_invested, avg_cost, current_nav, last_updated',
+            market_asset_data: 'asset_id, total_units, total_invested, avg_cost, current_nav, last_updated, scheme_name, scheme_code, nav_source',
             fixed_asset_data: 'asset_id, principal, interest_rate, start_date',
             liabilities: 'id, name, type, outstanding_balance, interest_rate',
             monthly_snapshots: 'month, total_assets, total_liabilities, net_worth'

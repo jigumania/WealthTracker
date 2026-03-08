@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { getCashBalances, calculateAccruedInterest, cleanupOrphans } from '../logic';
+import { getCashBalances, calculateAccruedInterest, cleanupOrphans, refreshAllAPINAVs } from '../logic';
 import { formatCurrency } from '../utils';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -20,6 +20,8 @@ const Dashboard = () => {
         });
         // Create snapshot for current month if it doesn't exist
         import('../logic').then(m => m.createMonthlySnapshot());
+        // Refresh API-based NAVs
+        refreshAllAPINAVs();
     }, [ledger, marketAssets, fixedAssets, liabilities, assets]);
 
     const assetIds = new Set(assets?.map(a => a.id) || []);

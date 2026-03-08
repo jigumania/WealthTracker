@@ -8,7 +8,7 @@ import type {
     Liability
 } from './types';
 import { v4 as uuidv4 } from 'uuid';
-import { differenceInDays, parseISO } from 'date-fns';
+import { differenceInDays, parseISO, isSameDay } from 'date-fns';
 import { auth } from './firebase';
 import { syncToFirestore, deleteFromFirestore, fetchAllFromFirestore, subscribeToCollection } from './services/firestore';
 
@@ -207,6 +207,9 @@ export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialD
     units: number;
     amount: number; // For 'new', this is investment. For 'existing', it's total invested.
     nav: number;
+    scheme_name?: string;
+    scheme_code?: string;
+    nav_source?: 'api' | 'manual';
 }) {
     const assetId = uuidv4();
     const newAsset: Asset = {
@@ -215,18 +218,44 @@ export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialD
         created_at: new Date().toISOString()
     };
 
+    let marketDataToSync: MarketAssetData | null = null;
+    let ledgerEntryToSync: CashLedgerEntry | null = null;
+
     await db.transaction('rw', [db.assets, db.market_asset_data, db.cash_ledger], async () => {
         await db.assets.add(newAsset);
 
-        // Sync Asset to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await syncToFirestore(user.uid, 'assets', newAsset);
-        }
-
         if (initialData) {
             if (initialData.mode === 'new') {
-                await investInAsset(assetId, initialData.amount, initialData.nav);
+                const { availableCash } = await getCashBalances();
+                if (initialData.amount > availableCash) {
+                    throw new Error('Insufficient available cash');
+                }
+
+                const unitsAdded = initialData.amount / initialData.nav;
+                const marketData: MarketAssetData = {
+                    asset_id: assetId,
+                    total_units: unitsAdded,
+                    total_invested: initialData.amount,
+                    avg_cost: initialData.nav,
+                    current_nav: initialData.nav,
+                    last_updated: new Date().toISOString(),
+                    scheme_name: initialData.scheme_name,
+                    scheme_code: initialData.scheme_code,
+                    nav_source: initialData.nav_source
+                };
+                await db.market_asset_data.add(marketData);
+                marketDataToSync = marketData;
+
+                const ledgerEntry: CashLedgerEntry = {
+                    id: uuidv4(),
+                    type: 'invest',
+                    amount: initialData.amount,
+                    related_asset_id: assetId,
+                    date: new Date().toISOString().split('T')[0],
+                    created_at: new Date().toISOString()
+                };
+                await db.cash_ledger.add(ledgerEntry);
+                ledgerEntryToSync = ledgerEntry;
             } else {
                 const marketData: MarketAssetData = {
                     asset_id: assetId,
@@ -234,30 +263,43 @@ export async function addAsset(asset: Omit<Asset, 'id' | 'created_at'>, initialD
                     total_invested: initialData.amount,
                     avg_cost: initialData.units > 0 ? initialData.amount / initialData.units : 0,
                     current_nav: initialData.nav,
-                    last_updated: new Date().toISOString()
+                    last_updated: new Date().toISOString(),
+                    scheme_name: initialData.scheme_name,
+                    scheme_code: initialData.scheme_code,
+                    nav_source: initialData.nav_source
                 };
                 await db.market_asset_data.add(marketData);
-
-                // Sync MarketData to Firestore
-                if (user) {
-                    await syncToFirestore(user.uid, 'market_asset_data', marketData);
-                }
+                marketDataToSync = marketData;
             }
         }
     });
 
+    // Perform Sync AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'assets', newAsset);
+        if (marketDataToSync) {
+            await syncToFirestore(user.uid, 'market_asset_data', marketDataToSync);
+        }
+        if (ledgerEntryToSync) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntryToSync);
+        }
+    }
+
     return assetId;
 }
 
-export async function investInAsset(assetId: string, amount: number, nav: number) {
-    const { availableCash } = await getCashBalances();
-    if (amount > availableCash) {
-        throw new Error('Insufficient available cash');
-    }
-
-    const unitsAdded = amount / nav;
+export async function investInAsset(assetId: string, amount: number, nav: number, scheme_name?: string, scheme_code?: string, nav_source?: 'api' | 'manual') {
+    let marketDataToSync: MarketAssetData | null = null;
+    let ledgerEntryToSync: CashLedgerEntry | null = null;
 
     await db.transaction('rw', [db.market_asset_data, db.cash_ledger], async () => {
+        const { availableCash } = await getCashBalances();
+        if (amount > availableCash) {
+            throw new Error('Insufficient available cash');
+        }
+
+        const unitsAdded = amount / nav;
         const existing = await db.market_asset_data.get(assetId);
 
         if (existing) {
@@ -268,15 +310,13 @@ export async function investInAsset(assetId: string, amount: number, nav: number
                 total_invested: newTotalInvested,
                 avg_cost: newTotalUnits > 0 ? newTotalInvested / newTotalUnits : 0,
                 current_nav: nav,
-                last_updated: new Date().toISOString()
+                last_updated: new Date().toISOString(),
+                scheme_name: scheme_name || existing.scheme_name,
+                scheme_code: scheme_code || existing.scheme_code,
+                nav_source: nav_source || existing.nav_source
             };
             await db.market_asset_data.update(assetId, update);
-
-            // Sync update to Firestore
-            const user = auth.currentUser;
-            if (user) {
-                await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
-            }
+            marketDataToSync = { asset_id: assetId, ...update } as MarketAssetData;
         } else {
             const marketData = {
                 asset_id: assetId,
@@ -284,15 +324,13 @@ export async function investInAsset(assetId: string, amount: number, nav: number
                 total_invested: amount,
                 avg_cost: nav,
                 current_nav: nav,
-                last_updated: new Date().toISOString()
+                last_updated: new Date().toISOString(),
+                scheme_name,
+                scheme_code,
+                nav_source
             };
             await db.market_asset_data.add(marketData);
-
-            // Sync to Firestore
-            const user = auth.currentUser;
-            if (user) {
-                await syncToFirestore(user.uid, 'market_asset_data', marketData);
-            }
+            marketDataToSync = marketData;
         }
 
         const ledgerEntry: CashLedgerEntry = {
@@ -304,13 +342,19 @@ export async function investInAsset(assetId: string, amount: number, nav: number
             created_at: new Date().toISOString()
         };
         await db.cash_ledger.add(ledgerEntry);
-
-        // Sync ledger to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
-        }
+        ledgerEntryToSync = ledgerEntry;
     });
+
+    // Perform Sync AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        if (marketDataToSync) {
+            await syncToFirestore(user.uid, 'market_asset_data', marketDataToSync);
+        }
+        if (ledgerEntryToSync) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntryToSync);
+        }
+    }
 }
 
 export async function sellAsset(assetId: string, unitsToSell: number, sellNav: number) {
@@ -322,6 +366,9 @@ export async function sellAsset(assetId: string, unitsToSell: number, sellNav: n
     const sellAmount = unitsToSell * sellNav;
     const remainingUnits = existing.total_units - unitsToSell;
     const remainingInvested = existing.avg_cost * remainingUnits;
+
+    let marketDataToSync: MarketAssetData | null = null;
+    let ledgerEntryToSync: CashLedgerEntry | null = null;
 
     await db.transaction('rw', [db.market_asset_data, db.cash_ledger], async () => {
         const update = remainingUnits === 0 ? {
@@ -338,12 +385,7 @@ export async function sellAsset(assetId: string, unitsToSell: number, sellNav: n
         };
 
         await db.market_asset_data.update(assetId, update);
-
-        // Sync MarketData update to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await syncToFirestore(user.uid, 'market_asset_data', { asset_id: assetId, ...update });
-        }
+        marketDataToSync = { ...existing, ...update };
 
         const ledgerEntry: CashLedgerEntry = {
             id: uuidv4(),
@@ -354,12 +396,19 @@ export async function sellAsset(assetId: string, unitsToSell: number, sellNav: n
             created_at: new Date().toISOString()
         };
         await db.cash_ledger.add(ledgerEntry);
-
-        // Sync Ledger to Firestore
-        if (user) {
-            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
-        }
+        ledgerEntryToSync = ledgerEntry;
     });
+
+    // Perform Sync AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        if (marketDataToSync) {
+            await syncToFirestore(user.uid, 'market_asset_data', marketDataToSync);
+        }
+        if (ledgerEntryToSync) {
+            await syncToFirestore(user.uid, 'cash_ledger', ledgerEntryToSync);
+        }
+    }
 }
 
 export async function updateNAV(assetId: string, nav: number) {
@@ -395,14 +444,14 @@ export async function addFixedAsset(asset: Omit<Asset, 'id' | 'created_at'>, dat
     await db.transaction('rw', [db.assets, db.fixed_asset_data], async () => {
         await db.assets.add(newAsset);
         await db.fixed_asset_data.add(fixedData);
-
-        // Sync to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await syncToFirestore(user.uid, 'assets', newAsset);
-            await syncToFirestore(user.uid, 'fixed_asset_data', fixedData);
-        }
     });
+
+    // Sync to Firestore AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        await syncToFirestore(user.uid, 'assets', newAsset);
+        await syncToFirestore(user.uid, 'fixed_asset_data', fixedData);
+    }
 }
 
 // --------------------------------------------------
@@ -434,19 +483,15 @@ export async function makeLiabilityPayment(liabilityId: string, amount: number) 
         throw new Error('Insufficient available cash');
     }
 
+    let liabilityUpdate: any = null;
+    let ledgerEntry: CashLedgerEntry | null = null;
+
     await db.transaction('rw', [db.liabilities, db.cash_ledger], async () => {
         const newBalance = liability.outstanding_balance - amount;
-        await db.liabilities.update(liabilityId, {
-            outstanding_balance: newBalance
-        });
+        liabilityUpdate = { outstanding_balance: newBalance };
+        await db.liabilities.update(liabilityId, liabilityUpdate);
 
-        // Sync Liability update to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await syncToFirestore(user.uid, 'liabilities', { id: liabilityId, outstanding_balance: newBalance });
-        }
-
-        const ledgerEntry: CashLedgerEntry = {
+        ledgerEntry = {
             id: uuidv4(),
             type: 'loan_payment',
             amount,
@@ -455,12 +500,18 @@ export async function makeLiabilityPayment(liabilityId: string, amount: number) 
             created_at: new Date().toISOString()
         };
         await db.cash_ledger.add(ledgerEntry);
+    });
 
-        // Sync Ledger to Firestore
-        if (user) {
+    // Sync to Firestore AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        if (liabilityUpdate) {
+            await syncToFirestore(user.uid, 'liabilities', { ...liability, ...liabilityUpdate });
+        }
+        if (ledgerEntry) {
             await syncToFirestore(user.uid, 'cash_ledger', ledgerEntry);
         }
-    });
+    }
 }
 
 // --------------------------------------------------
@@ -507,14 +558,17 @@ export async function deleteAsset(assetId: string) {
         await db.market_asset_data.delete(assetId);
         await db.fixed_asset_data.delete(assetId);
 
-        // Sync Delete to Firestore
-        const user = auth.currentUser;
-        if (user) {
-            await deleteFromFirestore(user.uid, 'assets', assetId);
-            await deleteFromFirestore(user.uid, 'market_asset_data', assetId);
-            await deleteFromFirestore(user.uid, 'fixed_asset_data', assetId);
-        }
+        // Cash ledger entries stay for history, or you could delete them too.
+        // For now we keep them to maintain historical net worth calculations if needed.
     });
+
+    // Sync Delete to Firestore AFTER transaction
+    const user = auth.currentUser;
+    if (user) {
+        await deleteFromFirestore(user.uid, 'assets', assetId);
+        await deleteFromFirestore(user.uid, 'market_asset_data', assetId);
+        await deleteFromFirestore(user.uid, 'fixed_asset_data', assetId);
+    }
 }
 
 export async function updateAssetBasic(assetId: string, name: string) {
@@ -652,4 +706,59 @@ export async function clearAllData() {
 
     // Re-seed categories
     await seedDatabase();
+}
+
+// --------------------------------------------------
+// MUTUAL FUND API ENGINE
+// --------------------------------------------------
+
+export async function searchMutualFunds(query: string) {
+    if (!query || query.length < 3) return [];
+    try {
+        const response = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        return data as { schemeCode: number; schemeName: string }[];
+    } catch (error) {
+        console.error('Mutual fund search failed:', error);
+        return [];
+    }
+}
+
+export async function fetchMutualFundNAV(schemeCode: string) {
+    try {
+        const response = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+        const data = await response.json();
+        if ((data.status === 'OK' || data.status === 'SUCCESS') && data.data && data.data.length > 0) {
+            return parseFloat(data.data[0].nav);
+        }
+        throw new Error(`Invalid response from MF API: ${data.status}`);
+    } catch (error) {
+        console.error('NAV fetch failed:', error);
+        throw error;
+    }
+}
+
+export async function refreshMarketAssetNAV(assetId: string, force = false) {
+    const data = await db.market_asset_data.get(assetId);
+    if (!data || data.nav_source !== 'api' || !data.scheme_code) return;
+
+    // Cache logic: 24 hours
+    const lastUpdated = parseISO(data.last_updated);
+    if (!force && isSameDay(lastUpdated, new Date())) {
+        return; // Already updated today
+    }
+
+    try {
+        const newNav = await fetchMutualFundNAV(data.scheme_code);
+        await updateNAV(assetId, newNav);
+    } catch (error) {
+        console.warn(`Auto-refresh failed for asset ${assetId}:`, error);
+    }
+}
+
+export async function refreshAllAPINAVs() {
+    const marketAssets = await db.market_asset_data.where('nav_source').equals('api').toArray();
+    for (const asset of marketAssets) {
+        await refreshMarketAssetNAV(asset.asset_id);
+    }
 }

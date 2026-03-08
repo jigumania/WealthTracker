@@ -11,8 +11,12 @@ import {
     deleteAsset,
     updateAssetBasic,
     updateMarketAssetDetails,
-    updateFixedAssetDetails
+    updateFixedAssetDetails,
+    searchMutualFunds,
+    fetchMutualFundNAV,
+    refreshMarketAssetNAV
 } from '../logic';
+import { useCallback, useEffect, useRef } from 'react';
 import { formatCurrency, formatNumber, formatSubtype } from '../utils';
 import type { AssetSubtype, AssetCategory } from '../types';
 
@@ -37,8 +41,16 @@ const Assets = () => {
         amount: '',
         nav: '',
         interestRate: '',
-        startDate: new Date().toISOString().split('T')[0]
+        startDate: new Date().toISOString().split('T')[0],
+        schemeName: '',
+        schemeCode: '',
+        navSource: 'manual' as 'api' | 'manual'
     });
+
+    const [searchResults, setSearchResults] = useState<{ schemeCode: number; schemeName: string }[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const searchTimeoutRef = useRef<any>(null);
 
     const [actionData, setActionData] = useState({ amount: '', units: '', nav: '' });
 
@@ -52,7 +64,10 @@ const Assets = () => {
                         mode: formData.mode,
                         units: parseFloat(formData.units || '0'),
                         amount: parseFloat(formData.amount || '0'),
-                        nav: parseFloat(formData.nav || '0')
+                        nav: parseFloat(formData.nav || '0'),
+                        scheme_name: formData.schemeName,
+                        scheme_code: formData.schemeCode,
+                        nav_source: formData.navSource
                     }
                 );
             } else {
@@ -75,8 +90,11 @@ const Assets = () => {
     const resetForm = () => {
         setFormData({
             name: '', category: 'market', subtype: 'mutual_fund', mode: 'new',
-            units: '', amount: '', nav: '', interestRate: '', startDate: new Date().toISOString().split('T')[0]
+            units: '', amount: '', nav: '', interestRate: '', startDate: new Date().toISOString().split('T')[0],
+            schemeName: '', schemeCode: '', navSource: 'manual'
         });
+        setSearchQuery('');
+        setSearchResults([]);
     };
 
     const handleAction = async (e: React.FormEvent) => {
@@ -84,7 +102,15 @@ const Assets = () => {
         if (!isActionModalOpen) return;
         try {
             if (isActionModalOpen.type === 'invest') {
-                await investInAsset(isActionModalOpen.assetId, parseFloat(actionData.amount), parseFloat(actionData.nav));
+                const asset = marketData?.find(d => d.asset_id === isActionModalOpen.assetId);
+                await investInAsset(
+                    isActionModalOpen.assetId,
+                    parseFloat(actionData.amount),
+                    parseFloat(actionData.nav),
+                    asset?.scheme_name,
+                    asset?.scheme_code,
+                    asset?.nav_source
+                );
             } else if (isActionModalOpen.type === 'sell') {
                 await sellAsset(isActionModalOpen.assetId, parseFloat(actionData.units), parseFloat(actionData.nav));
             } else if (isActionModalOpen.type === 'nav') {
@@ -94,6 +120,49 @@ const Assets = () => {
             setActionData({ amount: '', units: '', nav: '' });
         } catch (err: any) {
             alert(err.message);
+        }
+    };
+
+    const handleSearch = useCallback(async (q: string) => {
+        if (q.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+        setIsSearching(true);
+        const results = await searchMutualFunds(q);
+        setSearchResults(results);
+        setIsSearching(false);
+    }, []);
+
+    useEffect(() => {
+        if (searchQuery) {
+            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = setTimeout(() => {
+                handleSearch(searchQuery);
+            }, 500);
+        } else {
+            setSearchResults([]);
+        }
+    }, [searchQuery, handleSearch]);
+
+    const handleSelectFund = async (fund: { schemeCode: number; schemeName: string }) => {
+        setIsSearching(true);
+        try {
+            const nav = await fetchMutualFundNAV(fund.schemeCode.toString());
+            setFormData({
+                ...formData,
+                name: fund.schemeName,
+                schemeName: fund.schemeName,
+                schemeCode: fund.schemeCode.toString(),
+                nav: nav.toString(),
+                navSource: 'api'
+            });
+            setSearchQuery(fund.schemeName);
+            setSearchResults([]);
+        } catch (err) {
+            alert('Failed to fetch NAV for selected fund');
+        } finally {
+            setIsSearching(false);
         }
     };
 
@@ -160,6 +229,8 @@ const Assets = () => {
 
     // Calculate grouped summary
     const groups = assets?.reduce((acc, asset) => {
+        if (!asset.category || !asset.subtype) return acc;
+
         const key = `${asset.category}-${asset.subtype}`;
         if (!acc[key]) {
             acc[key] = {
@@ -175,19 +246,19 @@ const Assets = () => {
         if (asset.category === 'market') {
             const data = marketData?.find(d => d.asset_id === asset.id);
             if (data) {
-                const val = data.total_units * data.current_nav;
+                const val = (data.total_units || 0) * (data.current_nav || 0);
                 acc[key].totalValue += val;
-                acc[key].totalInvested += data.total_invested;
-                acc[key].totalGain += (val - data.total_invested);
+                acc[key].totalInvested += (data.total_invested || 0);
+                acc[key].totalGain += (val - (data.total_invested || 0));
                 acc[key].count++;
             }
         } else {
             const data = fixedData?.find(d => d.asset_id === asset.id);
             if (data) {
-                const val = calculateAccruedInterest(data.principal, data.interest_rate, data.start_date);
+                const val = calculateAccruedInterest(data.principal || 0, data.interest_rate || 0, data.start_date || new Date().toISOString());
                 acc[key].totalValue += val;
-                acc[key].totalInvested += data.principal;
-                acc[key].totalGain += (val - data.principal);
+                acc[key].totalInvested += (data.principal || 0);
+                acc[key].totalGain += (val - (data.principal || 0));
                 acc[key].count++;
             }
         }
@@ -221,7 +292,7 @@ const Assets = () => {
                             >
                                 <div className="list-item-info">
                                     <h4>{formatSubtype(group.subtype)}</h4>
-                                    <p>{group.count} Asset{group.count !== 1 ? 's' : ''} • {group.category.toUpperCase()}</p>
+                                    <p>{group.count} Asset{group.count !== 1 ? 's' : ''} • {(group.category || '').toUpperCase()}</p>
                                 </div>
                                 <div className="list-item-value">
                                     <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(group.totalValue)}</p>
@@ -280,15 +351,46 @@ const Assets = () => {
                                     </div>
                                     <div className="list-item-value">
                                         <p style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>{formatCurrency(currentValue)}</p>
-                                        <p style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px', color: gain >= 0 ? '#16a34a' : '#dc2626' }}>
-                                            {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
-                                        </p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                            <p style={{ fontSize: '13px', fontWeight: 600, color: gain >= 0 ? '#16a34a' : '#dc2626' }}>
+                                                {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
+                                            </p>
+                                            {data.nav_source === 'api' && (
+                                                <p style={{ fontSize: '10px', color: '#a3a3a3' }}>
+                                                    Updated: {new Date(data.last_updated).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
-                                    <button style={{ padding: '6px 14px', fontSize: '11px', background: 'black', color: 'white' }} onClick={() => setIsActionModalOpen({ type: 'invest', assetId: asset.id })}>Invest</button>
-                                    <button style={{ padding: '6px 14px', fontSize: '11px', background: 'white', color: 'black', border: '1px solid #000' }} onClick={() => setIsActionModalOpen({ type: 'sell', assetId: asset.id })}>Sell</button>
-                                    <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => setIsActionModalOpen({ type: 'nav', assetId: asset.id })}>Update {(isGold || isSilver) ? 'Rate' : 'NAV'}</button>
+                                    <button style={{ padding: '6px 14px', fontSize: '11px', background: 'black', color: 'white' }} onClick={() => {
+                                        setActionData({ ...actionData, nav: data.current_nav.toString() });
+                                        setIsActionModalOpen({ type: 'invest', assetId: asset.id });
+                                    }}>Invest</button>
+                                    <button style={{ padding: '6px 14px', fontSize: '11px', background: 'white', color: 'black', border: '1px solid #000' }} onClick={() => {
+                                        setActionData({ ...actionData, nav: data.current_nav.toString() });
+                                        setIsActionModalOpen({ type: 'sell', assetId: asset.id });
+                                    }}>Sell</button>
+                                    {data.nav_source === 'api' ? (
+                                        <button
+                                            style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }}
+                                            onClick={async () => {
+                                                try {
+                                                    await refreshMarketAssetNAV(asset.id, true);
+                                                } catch (err: any) {
+                                                    alert(err.message);
+                                                }
+                                            }}
+                                        >
+                                            Refresh NAV
+                                        </button>
+                                    ) : (
+                                        <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => {
+                                            setActionData({ ...actionData, nav: data.current_nav.toString() });
+                                            setIsActionModalOpen({ type: 'nav', assetId: asset.id });
+                                        }}>Update {(isGold || isSilver) ? 'Rate' : 'NAV'}</button>
+                                    )}
                                     <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: 'black', border: '1px solid #f0f0f0' }} onClick={() => openEditModal(asset.id)}>Edit</button>
                                     <button style={{ padding: '6px 14px', fontSize: '11px', background: 'transparent', color: '#ff4444', border: '1px solid #fff0f0' }} onClick={() => handleDeleteAsset(asset.id)}>Delete</button>
                                 </div>
@@ -341,7 +443,7 @@ const Assets = () => {
                             <button type="button" className={formData.category === 'fixed' ? 'active' : ''} onClick={() => setFormData({ ...formData, category: 'fixed', subtype: 'fd' })}>Fixed</button>
                         </div>
 
-                        <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
+                        <div className="form-group"><label>Asset Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value, schemeCode: '', navSource: 'manual' })} required /></div>
 
                         <div className="form-group">
                             <label>Subtype</label>
@@ -365,6 +467,36 @@ const Assets = () => {
                                 )}
                             </select>
                         </div>
+
+                        {formData.category === 'market' && formData.subtype === 'mutual_fund' && (
+                            <div className="form-group" style={{ position: 'relative' }}>
+                                <label>Search Mutual Fund</label>
+                                <input
+                                    placeholder="Type to search..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                />
+                                {isSearching && <div style={{ fontSize: '10px', marginTop: '4px', color: '#a3a3a3' }}>Searching...</div>}
+                                {searchResults.length > 0 && (
+                                    <div className="search-results" style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0,
+                                        background: 'white', border: '1px solid #e5e5e5', zIndex: 10,
+                                        maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                                    }}>
+                                        {searchResults.map(result => (
+                                            <div
+                                                key={result.schemeCode}
+                                                className="search-result-item"
+                                                onClick={() => handleSelectFund(result)}
+                                                style={{ padding: '10px', fontSize: '13px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                                            >
+                                                {result.schemeName}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {formData.category === 'market' ? (
                             <>

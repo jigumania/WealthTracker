@@ -36,6 +36,9 @@ export interface MarketAssetData {
   avg_cost: number;
   current_nav: number;
   last_updated: string;
+  scheme_name?: string;
+  scheme_code?: string;
+  nav_source?: 'api' | 'manual';
 }
 
 export interface FixedAssetData {

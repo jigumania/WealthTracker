@@ -9,6 +9,7 @@ const Cash = () => {
     const [balances, setBalances] = useState({ totalCash: 0, parkingBalance: 0, emergencyBalance: 0, availableCash: 0 });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState<string | null>(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         type: 'expense' as any,
         amount: '',
@@ -39,9 +40,14 @@ const Cash = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (window.confirm('Are you sure you want to delete this transaction?')) {
-            await deleteTransaction(id);
+    const handleDelete = (id: string) => {
+        setConfirmDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (confirmDeleteId) {
+            await deleteTransaction(confirmDeleteId);
+            setConfirmDeleteId(null);
         }
     };
 
@@ -285,6 +291,32 @@ const Cash = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {confirmDeleteId && (
+                <div className="modal-overlay" onClick={() => setConfirmDeleteId(null)}>
+                    <div className="modal" style={{ width: '400px' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Delete Transaction</h3>
+                        </div>
+                        <p style={{ color: '#737373', fontSize: '14px', marginBottom: '24px' }}>
+                            Are you sure you want to delete this transaction? This action cannot be undone.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                style={{ flex: 1, background: '#dc2626', color: 'white', border: 'none' }}
+                                onClick={confirmDelete}
+                            >
+                                Delete
+                            </button>
+                            <button
+                                style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #e5e5e5' }}
+                                onClick={() => setConfirmDeleteId(null)}
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
