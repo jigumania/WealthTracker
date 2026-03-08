@@ -9,7 +9,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { syncEverything } from '../logic';
+import { syncEverything, clearAllData } from '../logic';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -30,6 +30,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
         } catch (error) {
             console.error('Sync failed:', error);
             alert('Sync failed. Please try again.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleReset = async () => {
+        if (!window.confirm('Are you absolutely sure? This will wipe ALL your data locally and in the cloud. This cannot be undone.')) return;
+
+        setIsSyncing(true);
+        try {
+            await clearAllData();
+            alert('Account reset successfully.');
+            window.location.reload();
+        } catch (error) {
+            console.error('Reset failed:', error);
+            alert('Reset failed. Please try again.');
         } finally {
             setIsSyncing(false);
         }
@@ -60,6 +76,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                         <span>{item.label}</span>
                     </a>
                 ))}
+                {user && (
+                    <button
+                        className="nav-item reset-button"
+                        onClick={handleReset}
+                        style={{ marginTop: 'auto', color: '#ff4d4f' }}
+                    >
+                        <LogOut size={18} />
+                        <span>Reset Account</span>
+                    </button>
+                )}
             </aside>
             <main className="main-content">
                 <header className="auth-header" style={{ alignItems: 'center', gap: '16px' }}>

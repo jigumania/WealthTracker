@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, seedDatabase } from './db';
 import type {
     TransactionType,
     CashLedgerEntry,
@@ -607,4 +607,49 @@ export async function updateLiability(liabilityId: string, data: Partial<Liabili
     if (user) {
         await syncToFirestore(user.uid, 'liabilities', { id: liabilityId, ...data });
     }
+}
+
+export async function cleanupOrphans() {
+    const assets = await db.assets.toArray();
+    const assetIds = new Set(assets.map(a => a.id));
+
+    const marketData = await db.market_asset_data.toArray();
+    const fixedData = await db.fixed_asset_data.toArray();
+
+    const user = auth.currentUser;
+
+    for (const d of marketData) {
+        if (!assetIds.has(d.asset_id)) {
+            console.warn(`Deleting orphan market data for: ${d.asset_id}`);
+            await db.market_asset_data.delete(d.asset_id);
+            if (user) await deleteFromFirestore(user.uid, 'market_asset_data', d.asset_id);
+        }
+    }
+
+    for (const d of fixedData) {
+        if (!assetIds.has(d.asset_id)) {
+            console.warn(`Deleting orphan fixed data for: ${d.asset_id}`);
+            await db.fixed_asset_data.delete(d.asset_id);
+            if (user) await deleteFromFirestore(user.uid, 'fixed_asset_data', d.asset_id);
+        }
+    }
+}
+
+export async function clearAllData() {
+    const user = auth.currentUser;
+    const collections = ['categories', 'cash_ledger', 'assets', 'market_asset_data', 'fixed_asset_data', 'liabilities', 'monthly_snapshots'] as const;
+
+    for (const col of collections) {
+        if (user) {
+            const cloudData = await fetchAllFromFirestore(user.uid, col);
+            for (const item of cloudData) {
+                const id = (item as any).id || (item as any).asset_id || (item as any).month;
+                if (id) await deleteFromFirestore(user.uid, col, id);
+            }
+        }
+        await (db as any)[col].clear();
+    }
+
+    // Re-seed categories
+    await seedDatabase();
 }

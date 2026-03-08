@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { getCashBalances, calculateAccruedInterest } from '../logic';
+import { getCashBalances, calculateAccruedInterest, cleanupOrphans } from '../logic';
 import { formatCurrency } from '../utils';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -12,15 +12,21 @@ const Dashboard = () => {
     const fixedAssets = useLiveQuery(() => db.fixed_asset_data.toArray());
     const liabilities = useLiveQuery(() => db.liabilities.toArray());
     const snapshots = useLiveQuery(() => db.monthly_snapshots.orderBy('month').toArray());
+    const assets = useLiveQuery(() => db.assets.toArray());
 
     useEffect(() => {
-        getCashBalances().then(setBalances);
+        cleanupOrphans().then(() => {
+            getCashBalances().then(setBalances);
+        });
         // Create snapshot for current month if it doesn't exist
         import('../logic').then(m => m.createMonthlySnapshot());
-    }, [ledger, marketAssets, fixedAssets, liabilities]);
+    }, [ledger, marketAssets, fixedAssets, liabilities, assets]);
 
-    const marketTotal = marketAssets?.reduce((acc, curr) => acc + (curr.total_units * curr.current_nav), 0) || 0;
-    const fixedTotal = fixedAssets?.reduce((acc, curr) => acc + calculateAccruedInterest(curr.principal, curr.interest_rate, curr.start_date), 0) || 0;
+    const assetIds = new Set(assets?.map(a => a.id) || []);
+    const marketTotal = marketAssets?.reduce((acc, curr) =>
+        assetIds.has(curr.asset_id) ? acc + (curr.total_units * curr.current_nav) : acc, 0) || 0;
+    const fixedTotal = fixedAssets?.reduce((acc, curr) =>
+        assetIds.has(curr.asset_id) ? acc + calculateAccruedInterest(curr.principal, curr.interest_rate, curr.start_date) : acc, 0) || 0;
     const totalLiabilities = liabilities?.reduce((acc, curr) => acc + curr.outstanding_balance, 0) || 0;
     const totalAssets = balances.totalCash + marketTotal + fixedTotal;
     const netWorth = totalAssets - totalLiabilities;
